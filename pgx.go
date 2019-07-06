@@ -18,7 +18,7 @@ type pgStorage struct {
 }
 
 // New returns a new postgres storage instance.
-func NewPgxDBStore() *pgStorage {
+func NewPgDBStore() *pgStorage {
 	return &pgStorage{}
 }
 

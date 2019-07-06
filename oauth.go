@@ -16,7 +16,7 @@ func (l logger) Printf(format string, v ...interface{}) {
 	l.l(nil, format, v...)
 }
 
-func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
+func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
 	config := osin.ServerConfig{
 		AuthorizationExpiration:   86400,
 		AccessExpiration:          2678400,
