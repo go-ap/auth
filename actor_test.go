@@ -33,3 +33,7 @@ func TestPublicKey_UnmarshalJSON(t *testing.T) {
 func TestToPerson(t *testing.T) {
 	t.Skipf("TODO")
 }
+
+func TestFlattenPersonProperties(t *testing.T) {
+	t.Skipf("TODO")
+}
