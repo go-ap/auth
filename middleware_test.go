@@ -13,3 +13,7 @@ func TestLoadActorFromAuthHeader(t *testing.T) {
 func TestOauthLoader_Verify(t *testing.T) {
 	t.Skipf("TODO")
 }
+
+func TestActorContext(t *testing.T) {
+	t.Skipf("TODO")
+}

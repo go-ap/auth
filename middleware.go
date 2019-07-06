@@ -163,12 +163,15 @@ func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
 	return v, challenge
 }
 
+// CtxtKey
 type CtxtKey string
 
-var actorKey = CtxtKey("__actor")
+// ActorKey
+var ActorKey = CtxtKey("__actor")
 
-func actor(ctx context.Context) (Person, bool) {
-	ctxVal := ctx.Value(actorKey)
+// ActorContext
+func ActorContext(ctx context.Context) (Person, bool) {
+	ctxVal := ctx.Value(ActorKey)
 	if p, ok := ctxVal.(Person); ok {
 		return p, ok
 	}
