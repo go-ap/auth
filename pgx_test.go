@@ -58,6 +58,6 @@ func TestPgStorage_UpdateClient(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestNewPgxDBStore(t *testing.T) {
+func TestNewPgDBStore(t *testing.T) {
 	t.Skipf("TODO")
 }
