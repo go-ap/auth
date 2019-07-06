@@ -95,8 +95,13 @@ func ToPerson(it activitystreams.Item) (*Person, error) {
 	return &p, nil
 }
 
-// FlattenObjectProperties flattens the Object's properties from Object types to IRI
-func FlattenPersonProperties(o *Person) *Person {
-	o.Parent = *activitystreams.FlattenObjectProperties(&o.Parent)
-	return o
+// ToObject
+func ToObject(it activitystreams.Item) (*activitystreams.Object, error) {
+	switch o := it.(type) {
+	case *Person:
+		return &o.Parent, nil
+	case Person:
+		return &o.Parent, nil
+	}
+	return activitystreams.ToObject(it)
 }

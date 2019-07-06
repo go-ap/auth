@@ -34,6 +34,7 @@ func TestToPerson(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFlattenPersonProperties(t *testing.T) {
+func TestToObject(t *testing.T) {
 	t.Skipf("TODO")
 }
+
