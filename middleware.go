@@ -11,7 +11,6 @@ import (
 	"github.com/go-ap/activitypub/client"
 	as "github.com/go-ap/activitystreams"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/handlers"
 	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
@@ -36,8 +35,6 @@ var AnonymousActor = Person{
 		},
 	},
 }
-
-var oss *osin.Server
 
 type keyLoader struct {
 	baseIRI string
@@ -181,18 +178,11 @@ func ActorContext(ctx context.Context) (Person, bool) {
 	return AnonymousActor, false
 }
 
-func actorLoader(ctx context.Context) (st.ActorLoader, bool) {
-	ctxVal := ctx.Value(handlers.RepositoryKey)
-	s, ok := ctxVal.(st.ActorLoader)
-	return s, ok
-}
-
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either as
 // an OAuth2 or HTTP Signatures:
 //   For OAuth2 it tries to load the matching local Actor and use it further in the processing logic
 //   For HTTP Signatures it tries to load the federated Actor and use it further in the processing logic
-func LoadActorFromAuthHeader(r *http.Request, l logrus.FieldLogger) (as.Actor, error) {
-	client := client.NewClient()
+func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 	acct := AnonymousActor
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		var err error
@@ -201,31 +191,28 @@ func LoadActorFromAuthHeader(r *http.Request, l logrus.FieldLogger) (as.Actor, e
 		if strings.Contains(auth, "Bearer") {
 			// check OAuth2 bearer if present
 			method = "oauth2"
-			// TODO(marius): move this to a better place but outside the handler
-			v := oauthLoader{acc: acct, s: oss}
-			v.logFn = l.WithFields(logrus.Fields{"from": method}).Debugf
+			v := oauthLoader{acc: acct, s: s.os}
+			v.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
 				acct = v.acc
 			}
 		}
 		if strings.Contains(auth, "Signature") {
-			if loader, ok := actorLoader(r.Context()); ok {
-				// only verify http-signature if present
-				getter := keyLoader{acc: acct, l: loader, realm: r.URL.Host, c: client}
-				method = "httpSig"
-				getter.logFn = l.WithFields(logrus.Fields{"from": method}).Debugf
+			// only verify http-signature if present
+			getter := keyLoader{acc: acct, l: s.loader, realm: r.URL.Host, c: s.cl}
+			method = "httpSig"
+			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 
-				var v *httpsig.Verifier
-				v, challenge = httpSignatureVerifier(&getter)
-				if err = v.Verify(r); err == nil {
-					acct = getter.acc
-				}
+			var v *httpsig.Verifier
+			v, challenge = httpSignatureVerifier(&getter)
+			if err = v.Verify(r); err == nil {
+				acct = getter.acc
 			}
 		}
 		if err != nil {
 			// TODO(marius): fix this challenge passing
 			err = errors.NewUnauthorized(err, "").Challenge(challenge)
-			l.WithFields(logrus.Fields{
+			s.l.WithFields(logrus.Fields{
 				"id":        acct.GetID(),
 				"auth":      r.Header.Get("Authorization"),
 				"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
@@ -235,7 +222,7 @@ func LoadActorFromAuthHeader(r *http.Request, l logrus.FieldLogger) (as.Actor, e
 			return acct, err
 		} else {
 			// TODO(marius): Add actor's host to the logging
-			l.WithFields(logrus.Fields{
+			s.l.WithFields(logrus.Fields{
 				"auth": method,
 				"id":   acct.GetID(),
 			}).Debug("loaded account from Authorization header")
