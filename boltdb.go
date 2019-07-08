@@ -12,17 +12,18 @@ import (
 
 // boltStorage implements interface "github.com/RangelReale/osin".boltStorage and interface "github.com/ory/osin-storage".boltStorage
 type boltStorage struct {
-	d       *bolt.DB
-	root    []byte
-	logFn   loggerFn
-	errFn   loggerFn
+	d     *bolt.DB
+	path  string
+	root  []byte
+	logFn loggerFn
+	errFn loggerFn
 }
 
 type Config struct {
-	Path string
+	Path       string
 	BucketName string
-	LogFn loggerFn
-	ErrFn loggerFn
+	LogFn      loggerFn
+	ErrFn      loggerFn
 }
 
 func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
@@ -67,12 +68,10 @@ func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
 	})
 }
 
-
 // New returns a new postgres storage instance.
 func NewBoltDBStore(c Config) *boltStorage {
-	d, _ := bolt.Open(c.Path, 0600, nil)
 	return &boltStorage{
-		d:     d,
+		path:  c.Path,
 		root:  []byte(c.BucketName),
 		logFn: c.LogFn,
 		errFn: c.ErrFn,
@@ -93,12 +92,26 @@ func (s *boltStorage) Close() {
 	s.d.Close()
 }
 
+func (s *boltStorage) Open() error {
+	var err error
+	s.d, err = bolt.Open(s.path, 0600, nil)
+	if err != nil {
+		return errors.Annotatef(err, "could not open db")
+	}
+	return nil
+}
+
 const clientsBucket = "clients"
 
 // GetClient loads the client by id
 func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 	c := osin.DefaultClient{}
-	err := s.d.View(func(tx *bolt.Tx) error {
+	err := s.Open()
+	if err != nil {
+		return &c, err
+	}
+	defer s.Close()
+	err = s.d.View(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -124,22 +137,27 @@ func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
 func (s *boltStorage) UpdateClient(c osin.Client) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
 	data, err := assertToString(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
 		return err
 	}
-	cl := cl {
-		Id: c.GetId(),
-		Secret: c.GetSecret(),
+	cl := cl{
+		Id:          c.GetId(),
+		Secret:      c.GetSecret(),
 		RedirectUri: c.GetRedirectUri(),
-		Extra: json.RawMessage(data),
+		Extra:       json.RawMessage(data),
 	}
 	raw, err := json.Marshal(cl)
 	if err != nil {
 		return err
 	}
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -158,8 +176,13 @@ func (s *boltStorage) CreateClient(c osin.Client) error {
 }
 
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
-func (s *boltStorage) RemoveClient(id string) (err error) {
-	return  s.d.Update(func(tx *bolt.Tx) error {
+func (s *boltStorage) RemoveClient(id string) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -173,7 +196,12 @@ func (s *boltStorage) RemoveClient(id string) (err error) {
 }
 
 // SaveAuthorize saves authorize data.
-func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
+func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
 	extra, err := assertToString(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
@@ -194,7 +222,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	if err != nil {
 		return err
 	}
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -214,8 +242,13 @@ const authorizeBucket = "authorize"
 // Optionally can return error if expired.
 func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	var data osin.AuthorizeData
+	err := s.Open()
+	if err != nil {
+		return &data, err
+	}
+	defer s.Close()
 
-	err := s.d.View(func(tx *bolt.Tx) error {
+	err = s.d.View(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -255,8 +288,14 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *boltStorage) RemoveAuthorize(code string) (err error) {
-	return  s.d.Update(func(tx *bolt.Tx) error {
+func (s *boltStorage) RemoveAuthorize(code string) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -271,7 +310,12 @@ func (s *boltStorage) RemoveAuthorize(code string) (err error) {
 
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
-func (s *boltStorage) SaveAccess(data *osin.AccessData) (err error) {
+func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
 	prev := ""
 	authorizeData := &osin.AuthorizeData{}
 
@@ -307,7 +351,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) (err error) {
 		AccessToken:  data.AccessToken,
 		RefreshToken: data.RefreshToken,
 		ExpiresIn:    time.Duration(data.ExpiresIn),
-		Scope:         data.Scope,
+		Scope:        data.Scope,
 		RedirectURI:  data.RedirectUri,
 		CreatedAt:    data.CreatedAt,
 		Extra:        json.RawMessage(extra),
@@ -316,7 +360,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) (err error) {
 	if err != nil {
 		return err
 	}
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -336,8 +380,13 @@ const accessBucket = "access"
 // Optionally can return error if expired.
 func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 	var result osin.AccessData
+	err := s.Open()
+	if err != nil {
+		return &result, err
+	}
+	defer s.Close()
 
-	err := s.d.View(func(tx *bolt.Tx) error {
+	err = s.d.View(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -376,7 +425,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 
 // RemoveAccess revokes or deletes an AccessData.
 func (s *boltStorage) RemoveAccess(code string) (err error) {
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -395,8 +444,13 @@ const refreshBucket = "refresh"
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
 	var ref ref
-	err := s.d.View(func(tx *bolt.Tx) error {
+	err = s.d.View(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -422,7 +476,12 @@ func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *boltStorage) RemoveRefresh(code string) error {
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	err := s.Open()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
@@ -443,7 +502,7 @@ func (s *boltStorage) saveRefresh(refresh, access string) (err error) {
 	if err != nil {
 		return err
 	}
-	return  s.d.Update(func(tx *bolt.Tx) error {
+	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
