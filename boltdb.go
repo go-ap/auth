@@ -26,13 +26,18 @@ type Config struct {
 }
 
 
-func Bootstrap(path string, rootBucket []byte) error {
+func Bootstrap(path string, rootBucket []byte, cl osin.DefaultClient) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return errors.Annotatef(err, "could not open db")
 	}
 	defer db.Close()
+
+	raw, err := json.Marshal(cl)
+	if err != nil {
+		return err
+	}
 
 	return db.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists(rootBucket)
@@ -51,9 +56,12 @@ func Bootstrap(path string, rootBucket []byte) error {
 		if err != nil {
 			return errors.Annotatef(err, "could not create %s bucket", authorizeBucket)
 		}
-		_, err = root.CreateBucketIfNotExists([]byte(clientsBucket))
+		cb, err := root.CreateBucketIfNotExists([]byte(clientsBucket))
 		if err != nil {
 			return errors.Annotatef(err, "could not create %s bucket", clientsBucket)
+		}
+		if cl.Id != "" {
+			return cb.Put([]byte(cl.Id), raw)
 		}
 		return nil
 	})
