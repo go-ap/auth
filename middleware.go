@@ -199,7 +199,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 		}
 		if strings.Contains(auth, "Signature") {
 			// only verify http-signature if present
-			getter := keyLoader{acc: acct, l: s.loader, realm: r.URL.Host, c: s.cl}
+			getter := keyLoader{acc: acct, l: s.st, realm: r.URL.Host, c: s.cl}
 			method = "httpSig"
 			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 

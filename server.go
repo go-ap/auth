@@ -19,10 +19,21 @@ func (a *Account) IsLogged() bool {
 type Server struct {
 	baseURL string
 	account Account
-	os     *osin.Server
-	cl     client.Client
-	loader storage.ActorLoader
-	l      logrus.FieldLogger
+	os      *osin.Server
+	cl      client.Client
+	st      storage.ActorLoader
+	l       logrus.FieldLogger
+}
+
+func New(url string, os *osin.Server, st storage.ActorLoader, l logrus.FieldLogger) *Server {
+	return &Server{
+		baseURL: url,
+		account: Account{actor:AnonymousActor},
+		os:      os,
+		cl:      client.NewClient(),
+		st:      st,
+		l:       l,
+	}
 }
 
 func (s Server) Routes(r chi.Router) chi.Routes {
