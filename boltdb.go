@@ -26,7 +26,7 @@ type Config struct {
 }
 
 
-func Bootstrap(path string, rootBucket []byte, cl osin.DefaultClient) error {
+func BootstrapBoltDB(path string, rootBucket []byte, cl osin.DefaultClient) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
