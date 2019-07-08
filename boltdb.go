@@ -25,7 +25,6 @@ type Config struct {
 	ErrFn loggerFn
 }
 
-
 func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
@@ -91,7 +90,7 @@ func (s *boltStorage) Clone() osin.Storage {
 
 // Close the resources the boltStorage potentially holds (using Clone for example)
 func (s *boltStorage) Close() {
-	//s.db.Close()
+	s.d.Close()
 }
 
 const clientsBucket = "clients"
