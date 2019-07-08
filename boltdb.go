@@ -83,7 +83,6 @@ func NewBoltDBStore(c Config) *boltStorage {
 // This is to avoid cloning the connection at each method access.
 // Can return itself if not a problem.
 func (s *boltStorage) Clone() osin.Storage {
-	s.Close()
 	return s
 }
 
