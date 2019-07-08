@@ -38,7 +38,6 @@ func New(url string, os *osin.Server, st storage.ActorLoader, l logrus.FieldLogg
 
 func (s Server) Routes(r chi.Router) chi.Routes {
 	return r.Route("/oauth", func(r chi.Router) {
-		//r.Use(h.NeedsSessions)
 		// Authorization code endpoint
 		r.With(s.ValidateLoggedIn()).Get("/authorize", s.Authorize)
 		r.Post("/authorize", s.Authorize)
