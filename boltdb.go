@@ -25,6 +25,41 @@ type Config struct {
 	ErrFn loggerFn
 }
 
+
+func Bootstrap(path string, rootBucket []byte) error {
+	var err error
+	db, err := bolt.Open(path, 0600, nil)
+	if err != nil {
+		return errors.Annotatef(err, "could not open db")
+	}
+	defer db.Close()
+
+	return db.Update(func(tx *bolt.Tx) error {
+		root, err := tx.CreateBucketIfNotExists(rootBucket)
+		if err != nil {
+			return errors.Annotatef(err, "could not create root bucket")
+		}
+		_, err = root.CreateBucketIfNotExists([]byte(accessBucket))
+		if err != nil {
+			return errors.Annotatef(err, "could not create %s bucket", accessBucket)
+		}
+		_, err = root.CreateBucketIfNotExists([]byte(refreshBucket))
+		if err != nil {
+			return errors.Annotatef(err, "could not create %s bucket", refreshBucket)
+		}
+		_, err = root.CreateBucketIfNotExists([]byte(authorizeBucket))
+		if err != nil {
+			return errors.Annotatef(err, "could not create %s bucket", authorizeBucket)
+		}
+		_, err = root.CreateBucketIfNotExists([]byte(clientsBucket))
+		if err != nil {
+			return errors.Annotatef(err, "could not create %s bucket", clientsBucket)
+		}
+		return nil
+	})
+}
+
+
 // New returns a new postgres storage instance.
 func NewBoltDBStore(c Config) *boltStorage {
 	d, _ := bolt.Open(c.Path, 0600, nil)
@@ -163,7 +198,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	})
 }
 
-var authorizeBucket = "authorize"
+const authorizeBucket = "authorize"
 
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
