@@ -22,6 +22,10 @@ func NewPgDBStore() *pgStorage {
 	return &pgStorage{}
 }
 
+func BootstrapPgDB(db  *pgx.Conn, cl osin.DefaultClient) error {
+	return nil
+}
+
 // Clone the storage if needed. For example, using mgo, you can clone the session with session.Clone
 // to avoid concurrent access problems.
 // This is to avoid cloning the connection at each method access.
