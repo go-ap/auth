@@ -26,7 +26,7 @@ type Config struct {
 }
 
 
-func BootstrapBoltDB(path string, rootBucket []byte, cl osin.DefaultClient) error {
+func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
@@ -60,8 +60,9 @@ func BootstrapBoltDB(path string, rootBucket []byte, cl osin.DefaultClient) erro
 		if err != nil {
 			return errors.Annotatef(err, "could not create %s bucket", clientsBucket)
 		}
-		if cl.Id != "" {
-			return cb.Put([]byte(cl.Id), raw)
+		id := cl.GetId()
+		if id != "" {
+			return cb.Put([]byte(id), raw)
 		}
 		return nil
 	})

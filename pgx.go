@@ -22,7 +22,7 @@ func NewPgDBStore() *pgStorage {
 	return &pgStorage{}
 }
 
-func BootstrapPgDB(db  *pgx.Conn, cl osin.DefaultClient) error {
+func BootstrapPgDB(db  *pgx.Conn, cl osin.Client) error {
 	return nil
 }
 
