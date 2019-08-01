@@ -251,17 +251,17 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	}
 	defer s.Close()
 
+	auth := auth{}
 	err = s.d.View(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
 		}
-		auth := auth{}
-		cb := rb.Bucket([]byte(authorizeBucket))
-		if cb == nil {
+		ab := rb.Bucket([]byte(authorizeBucket))
+		if ab == nil {
 			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
 		}
-		raw := cb.Get([]byte(code))
+		raw := ab.Get([]byte(code))
 		if err := json.Unmarshal(raw, &auth); err != nil {
 			return err
 		}
@@ -273,7 +273,6 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		data.CreatedAt = auth.CreatedAt
 		data.UserData = auth.Extra
 
-		c, err := s.GetClient(auth.Client)
 		if err != nil {
 			return err
 		}
@@ -283,7 +282,22 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 			return errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 		}
 
-		data.Client = c
+		c := osin.DefaultClient{}
+		cl := cl{}
+		cb := rb.Bucket([]byte(clientsBucket))
+		if cb == nil {
+			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+		}
+		rawC := cb.Get([]byte(auth.Client))
+		if err := json.Unmarshal(rawC, &cl); err != nil {
+			return err
+		}
+		c.Id = cl.Id
+		c.Secret = cl.Secret
+		c.RedirectUri = cl.RedirectUri
+		c.UserData = cl.Extra
+
+		data.Client = &c
 		return nil
 	})
 
