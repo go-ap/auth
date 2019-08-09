@@ -26,18 +26,13 @@ type Config struct {
 	ErrFn      loggerFn
 }
 
-func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
+func BootstrapBoltDB(path string, rootBucket []byte) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return errors.Annotatef(err, "could not open db")
 	}
 	defer db.Close()
-
-	raw, err := json.Marshal(cl)
-	if err != nil {
-		return errors.Annotatef(err, "Unable to marshal client object")
-	}
 
 	return db.Update(func(tx *bolt.Tx) error {
 		root, err := tx.CreateBucketIfNotExists(rootBucket)
@@ -56,13 +51,9 @@ func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
 		if err != nil {
 			return errors.Annotatef(err, "could not create %s bucket", authorizeBucket)
 		}
-		cb, err := root.CreateBucketIfNotExists([]byte(clientsBucket))
+		_, err = root.CreateBucketIfNotExists([]byte(clientsBucket))
 		if err != nil {
 			return errors.Annotatef(err, "could not create %s bucket", clientsBucket)
-		}
-		id := cl.GetId()
-		if id != "" {
-			return cb.Put([]byte(id), raw)
 		}
 		return nil
 	})
