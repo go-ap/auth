@@ -240,7 +240,6 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	})
 }
 
-
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
@@ -263,8 +262,11 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 			return errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
 		}
 		raw := ab.Get([]byte(code))
+
 		if err := json.Unmarshal(raw, &auth); err != nil {
-			return errors.Annotatef(err, "Unable to unmarshal authorization object")
+			err := errors.Annotatef(err, "Unable to unmarshal authorization object")
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return err
 		}
 		data.Code = auth.Code
 		data.ExpiresIn = int32(auth.ExpiresIn)
@@ -283,21 +285,24 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		c := osin.DefaultClient{}
 		cl := cl{}
 		cb := rb.Bucket([]byte(clientsBucket))
-		if cb == nil {
+		if cb != nil {
+			rawC := cb.Get([]byte(auth.Client))
+			if err := json.Unmarshal(rawC, &cl); err != nil {
+				err := errors.Annotatef(err, "Unable to unmarshal client object")
+				s.errFn(logrus.Fields{"code": code}, err.Error())
+				return nil
+			}
+			c.Id = cl.Id
+			c.Secret = cl.Secret
+			c.RedirectUri = cl.RedirectUri
+			c.UserData = cl.Extra
+
+			data.Client = &c
+		} else {
 			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
 			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return err
+			return nil
 		}
-		rawC := cb.Get([]byte(auth.Client))
-		if err := json.Unmarshal(rawC, &cl); err != nil {
-			return errors.Annotatef(err, "Unable to unmarshal client object")
-		}
-		c.Id = cl.Id
-		c.Secret = cl.Secret
-		c.RedirectUri = cl.RedirectUri
-		c.UserData = cl.Extra
-
-		data.Client = &c
 		return nil
 	})
 
@@ -431,11 +436,13 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 		if cb == nil {
 			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
 			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return err
+			return nil
 		}
 		rawC := cb.Get([]byte(access.Client))
 		if err := json.Unmarshal(rawC, &cl); err != nil {
-			return errors.Annotatef(err, "Unable to unmarshal client object")
+			err := errors.Annotatef(err, "Unable to unmarshal client object")
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return nil
 		}
 		c.Id = cl.Id
 		c.Secret = cl.Secret
@@ -444,39 +451,46 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 
 		result.Client = &c
 		if err != nil {
-			s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "select",}, err.Error())
-			return errors.Annotatef(err, "Unable to load client for current access token")
+			err := errors.Annotatef(err, "Unable to load client for current access token")
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return nil
 		}
 
 		authB := rb.Bucket([]byte(authorizeBucket))
 		if authB == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
+			err := errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return nil
 		}
 		auth := auth{}
 
 		rawAuth := authB.Get([]byte(access.Authorize))
 		if err := json.Unmarshal(rawAuth, &auth); err != nil {
-			return errors.Annotatef(err, "Unable to unmarshal authorization object")
+			err := errors.Annotatef(err, "Unable to unmarshal authorization object")
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return nil
 		}
 		data := osin.AuthorizeData{
-			Code : auth.Code,
-			ExpiresIn : int32(auth.ExpiresIn),
-			Scope : auth.Scope,
-			RedirectUri : auth.RedirectURI,
-			State : auth.State,
-			CreatedAt : auth.CreatedAt,
-			UserData : auth.Extra,
+			Code:        auth.Code,
+			ExpiresIn:   int32(auth.ExpiresIn),
+			Scope:       auth.Scope,
+			RedirectUri: auth.RedirectURI,
+			State:       auth.State,
+			CreatedAt:   auth.CreatedAt,
+			UserData:    auth.Extra,
 		}
 
 		if data.ExpireAt().Before(time.Now()) {
 			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return err
+			return nil
 		}
 		var prevAccess acc
 		rawPrev := ab.Get([]byte(access.Previous))
 		if err := json.Unmarshal(rawPrev, &prevAccess); err != nil {
-			return errors.Annotatef(err, "Unable to unmarshal previous access object")
+			err := errors.Annotatef(err, "Unable to unmarshal previous access object")
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return nil
 		}
 		prev := osin.AccessData{}
 		prev.AccessToken = prevAccess.AccessToken
@@ -488,7 +502,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 		prev.UserData = prevAccess.Extra
 
 		result.AccessData = &prev
-		
+
 		return nil
 	})
 
