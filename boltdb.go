@@ -36,7 +36,7 @@ func BootstrapBoltDB(path string, rootBucket []byte, cl osin.Client) error {
 
 	raw, err := json.Marshal(cl)
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to marshal client object")
 	}
 
 	return db.Update(func(tx *bolt.Tx) error {
@@ -126,7 +126,7 @@ func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 		}
 		raw := cb.Get([]byte(id))
 		if err := json.Unmarshal(raw, &cl); err != nil {
-			return err
+			return errors.Annotatef(err, "Unable to unmarshal client object")
 		}
 		c.Id = cl.Id
 		c.Secret = cl.Secret
@@ -142,13 +142,13 @@ func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 func (s *boltStorage) UpdateClient(c osin.Client) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	data, err := assertToString(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
-		return err
+		return errors.Annotatef(err, "Invalid user-data")
 	}
 	cl := cl{
 		Id:          c.GetId(),
@@ -158,7 +158,7 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 	}
 	raw, err := json.Marshal(cl)
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to marshal client object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
@@ -182,7 +182,7 @@ func (s *boltStorage) CreateClient(c osin.Client) error {
 func (s *boltStorage) RemoveClient(id string) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *bolt.Tx) error {
@@ -198,17 +198,19 @@ func (s *boltStorage) RemoveClient(id string) error {
 	})
 }
 
+const authorizeBucket = "authorize"
+
 // SaveAuthorize saves authorize data.
 func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	extra, err := assertToString(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
-		return err
+		return errors.Annotatef(err, "Invalid user-data")
 	}
 
 	auth := auth{
@@ -223,7 +225,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	}
 	raw, err := json.Marshal(auth)
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to marshal authorization object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
@@ -238,7 +240,6 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	})
 }
 
-const authorizeBucket = "authorize"
 
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
@@ -259,11 +260,11 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		}
 		ab := rb.Bucket([]byte(authorizeBucket))
 		if ab == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+			return errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
 		}
 		raw := ab.Get([]byte(code))
 		if err := json.Unmarshal(raw, &auth); err != nil {
-			return err
+			return errors.Annotatef(err, "Unable to unmarshal authorization object")
 		}
 		data.Code = auth.Code
 		data.ExpiresIn = int32(auth.ExpiresIn)
@@ -273,24 +274,23 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		data.CreatedAt = auth.CreatedAt
 		data.UserData = auth.Extra
 
-		if err != nil {
-			return err
-		}
-
 		if data.ExpireAt().Before(time.Now()) {
+			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return errors.Errorf("Token expired at %s.", data.ExpireAt().String())
+			return err
 		}
 
 		c := osin.DefaultClient{}
 		cl := cl{}
 		cb := rb.Bucket([]byte(clientsBucket))
 		if cb == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return err
 		}
 		rawC := cb.Get([]byte(auth.Client))
 		if err := json.Unmarshal(rawC, &cl); err != nil {
-			return err
+			return errors.Annotatef(err, "Unable to unmarshal client object")
 		}
 		c.Id = cl.Id
 		c.Secret = cl.Secret
@@ -308,7 +308,7 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 func (s *boltStorage) RemoveAuthorize(code string) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 
@@ -330,7 +330,7 @@ func (s *boltStorage) RemoveAuthorize(code string) error {
 func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	prev := ""
@@ -347,7 +347,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 	extra, err := assertToString(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
-		return err
+		return errors.Annotatef(err, "Invalid client user-data")
 	}
 
 	if data.RefreshToken != "" {
@@ -375,7 +375,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 	}
 	raw, err := json.Marshal(acc)
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to marshal access object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
@@ -399,7 +399,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 	var result osin.AccessData
 	err := s.Open()
 	if err != nil {
-		return &result, err
+		return &result, errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 
@@ -408,32 +408,87 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 		if rb == nil {
 			return errors.Errorf("Invalid bucket %s", s.root)
 		}
-		var acc acc
-		cb := rb.Bucket([]byte(accessBucket))
-		if cb == nil {
+		var access acc
+		ab := rb.Bucket([]byte(accessBucket))
+		if ab == nil {
 			return errors.Newf("Invalid bucket %s/%s", s.root, accessBucket)
 		}
-		raw := cb.Get([]byte(code))
-		if err := json.Unmarshal(raw, &acc); err != nil {
+		raw := ab.Get([]byte(code))
+		if err := json.Unmarshal(raw, &access); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal access object")
+		}
+		result.AccessToken = access.AccessToken
+		result.RefreshToken = access.RefreshToken
+		result.ExpiresIn = int32(access.ExpiresIn)
+		result.Scope = access.Scope
+		result.RedirectUri = access.RedirectURI
+		result.CreatedAt = access.CreatedAt
+		result.UserData = access.Extra
+
+		c := osin.DefaultClient{}
+		cl := cl{}
+		cb := rb.Bucket([]byte(clientsBucket))
+		if cb == nil {
+			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+			s.errFn(logrus.Fields{"code": code}, err.Error())
 			return err
 		}
-		result.AccessToken = acc.AccessToken
-		result.RefreshToken = acc.RefreshToken
-		result.ExpiresIn = int32(acc.ExpiresIn)
-		result.Scope = acc.Scope
-		result.RedirectUri = acc.RedirectURI
-		result.CreatedAt = acc.CreatedAt
-		result.UserData = acc.Extra
-		client, err := s.GetClient(acc.Client)
+		rawC := cb.Get([]byte(access.Client))
+		if err := json.Unmarshal(rawC, &cl); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal client object")
+		}
+		c.Id = cl.Id
+		c.Secret = cl.Secret
+		c.RedirectUri = cl.RedirectUri
+		c.UserData = cl.Extra
+
+		result.Client = &c
 		if err != nil {
 			s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "select",}, err.Error())
-			return err
+			return errors.Annotatef(err, "Unable to load client for current access token")
 		}
 
-		result.Client = client
-		result.AuthorizeData, _ = s.LoadAuthorize(acc.Authorize)
-		prevAccess, _ := s.LoadAccess(acc.Previous)
-		result.AccessData = prevAccess
+		authB := rb.Bucket([]byte(authorizeBucket))
+		if authB == nil {
+			return errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
+		}
+		auth := auth{}
+
+		rawAuth := authB.Get([]byte(access.Authorize))
+		if err := json.Unmarshal(rawAuth, &auth); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal authorization object")
+		}
+		data := osin.AuthorizeData{
+			Code : auth.Code,
+			ExpiresIn : int32(auth.ExpiresIn),
+			Scope : auth.Scope,
+			RedirectUri : auth.RedirectURI,
+			State : auth.State,
+			CreatedAt : auth.CreatedAt,
+			UserData : auth.Extra,
+		}
+
+		if data.ExpireAt().Before(time.Now()) {
+			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
+			s.errFn(logrus.Fields{"code": code}, err.Error())
+			return err
+		}
+		var prevAccess acc
+		rawPrev := ab.Get([]byte(access.Previous))
+		if err := json.Unmarshal(rawPrev, &prevAccess); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal previous access object")
+		}
+		prev := osin.AccessData{}
+		prev.AccessToken = prevAccess.AccessToken
+		prev.RefreshToken = prevAccess.RefreshToken
+		prev.ExpiresIn = int32(prevAccess.ExpiresIn)
+		prev.Scope = prevAccess.Scope
+		prev.RedirectUri = prevAccess.RedirectURI
+		prev.CreatedAt = prevAccess.CreatedAt
+		prev.UserData = prevAccess.Extra
+
+		result.AccessData = &prev
+		
 		return nil
 	})
 
@@ -463,7 +518,7 @@ const refreshBucket = "refresh"
 func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 	err := s.Open()
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	var ref ref
@@ -480,7 +535,7 @@ func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 		}
 		for k, v := u.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = u.Next() {
 			if err := json.Unmarshal(v, &ref); err != nil {
-				return err
+				return errors.Annotatef(err, "Unable to unmarshal refresh token object")
 			}
 		}
 		return nil
@@ -495,7 +550,7 @@ func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 func (s *boltStorage) RemoveRefresh(code string) error {
 	err := s.Open()
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *bolt.Tx) error {
@@ -517,7 +572,7 @@ func (s *boltStorage) saveRefresh(refresh, access string) (err error) {
 	}
 	raw, err := json.Marshal(ref)
 	if err != nil {
-		return err
+		return errors.Annotatef(err, "Unable to marshal refresh token object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
