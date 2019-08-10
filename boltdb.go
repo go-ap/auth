@@ -136,7 +136,7 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
-	data, err := assertToString(c.GetUserData())
+	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
@@ -198,7 +198,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
-	extra, err := assertToString(data.UserData)
+	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
@@ -340,7 +340,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		authorizeData = data.AuthorizeData
 	}
 
-	extra, err := assertToString(data.UserData)
+	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid client user-data")
@@ -382,7 +382,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		if cb == nil {
 			return errors.Newf("Invalid bucket %s/%s", s.root, accessBucket)
 		}
-		return cb.Put([]byte(authorizeData.Code), raw)
+		return cb.Put([]byte(acc.AccessToken), raw)
 	})
 }
 

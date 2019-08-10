@@ -67,7 +67,7 @@ func (s *pgStorage) GetClient(id string) (osin.Client, error) {
 
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
 func (s *pgStorage) UpdateClient(c osin.Client) error {
-	data, err := assertToString(c.GetUserData())
+	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
 		return err
@@ -82,7 +82,7 @@ func (s *pgStorage) UpdateClient(c osin.Client) error {
 
 // CreateClient stores the client in the database and returns an error, if something went wrong.
 func (s *pgStorage) CreateClient(c osin.Client) error {
-	data, err := assertToString(c.GetUserData())
+	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
 		return err
@@ -107,7 +107,7 @@ func (s *pgStorage) RemoveClient(id string) (err error) {
 
 // SaveAuthorize saves authorize data.
 func (s *pgStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
-	extra, err := assertToString(data.UserData)
+	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return err
@@ -203,7 +203,7 @@ func (s *pgStorage) SaveAccess(data *osin.AccessData) (err error) {
 		authorizeData = data.AuthorizeData
 	}
 
-	extra, err := assertToString(data.UserData)
+	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return err
@@ -345,19 +345,19 @@ func (s *pgStorage) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) 
 	return nil
 }
 
-func assertToString(in interface{}) (string, error) {
+func assertToBytes(in interface{}) ([]byte, error) {
 	var ok bool
 	var data string
 	if in == nil {
-		return "", nil
+		return nil, nil
 	} else if data, ok = in.(string); ok {
-		return data, nil
+		return []byte(data), nil
 	} else if byt, ok := in.([]byte); ok {
-		return string(byt), nil
+		return byt, nil
 	} else if byt, ok := in.(json.RawMessage); ok {
-		return string(byt), nil
+		return byt, nil
 	} else if str, ok := in.(fmt.Stringer); ok {
-		return str.String(), nil
+		return []byte(str.String()), nil
 	}
-	return "", errors.Errorf(`Could not assert "%v" to string`, in)
+	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
 }
