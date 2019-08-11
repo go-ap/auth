@@ -95,6 +95,42 @@ func (s *boltStorage) Open() error {
 	return nil
 }
 
+func (s *boltStorage) ListClients() ([]osin.Client, error) {
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	clients := make([]osin.Client, 0)
+	err = s.d.View(func(tx *bolt.Tx) error {
+		rb := tx.Bucket(s.root)
+		if rb == nil {
+			return errors.Errorf("Invalid bucket %s", s.root)
+		}
+		cl := cl{}
+		cb := rb.Bucket([]byte(clientsBucket))
+		if cb == nil {
+			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+		}
+		c := cb.Cursor()
+		for k, raw := c.First(); k != nil; k, raw = c.Next() {
+			if err := json.Unmarshal(raw, &cl); err != nil {
+				s.errFn(nil, "Unable to unmarshal client object %s", err)
+				continue
+			}
+			d := osin.DefaultClient{
+				Id:          cl.Id,
+				Secret:      cl.Secret,
+				RedirectUri: cl.RedirectUri,
+				UserData:    cl.Extra,
+			}
+			clients = append(clients, &d)
+		}
+		return nil
+	})
+	return clients, err
+}
+
 const clientsBucket = "clients"
 
 // GetClient loads the client by id
