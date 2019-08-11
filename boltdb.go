@@ -172,7 +172,6 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
-	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
@@ -181,7 +180,7 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 		Id:          c.GetId(),
 		Secret:      c.GetSecret(),
 		RedirectUri: c.GetRedirectUri(),
-		Extra:       json.RawMessage(data),
+		Extra:       c.GetUserData(),
 	}
 	raw, err := json.Marshal(cl)
 	if err != nil {
@@ -234,21 +233,20 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
-	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
 	}
 
 	auth := auth{
-		data.Client.GetId(),
-		data.Code,
-		time.Duration(data.ExpiresIn),
-		data.Scope,
-		data.RedirectUri,
-		data.State,
-		data.CreatedAt,
-		json.RawMessage(extra),
+		Client:      data.Client.GetId(),
+		Code:        data.Code,
+		ExpiresIn:   time.Duration(data.ExpiresIn),
+		Scope:       data.Scope,
+		RedirectURI: data.RedirectUri,
+		State:       data.State,
+		CreatedAt:   data.CreatedAt,
+		Extra:       data.UserData,
 	}
 	raw, err := json.Marshal(auth)
 	if err != nil {
@@ -376,7 +374,6 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		authorizeData = data.AuthorizeData
 	}
 
-	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid client user-data")
@@ -403,7 +400,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		Scope:        data.Scope,
 		RedirectURI:  data.RedirectUri,
 		CreatedAt:    data.CreatedAt,
-		Extra:        json.RawMessage(extra),
+		Extra:        data.UserData,
 	}
 	raw, err := json.Marshal(acc)
 	if err != nil {

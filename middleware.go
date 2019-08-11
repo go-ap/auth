@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/go-ap/activitypub"
@@ -123,6 +122,7 @@ type oauthLoader struct {
 	logFn func(string, ...interface{})
 	acc   Person
 	s     *osin.Server
+	l     st.ActorLoader
 }
 
 func (k *oauthLoader) Verify(r *http.Request) (error, string) {
@@ -131,10 +131,19 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	if err != nil {
 		return err, ""
 	}
-	if b, ok := dat.UserData.(json.RawMessage); ok {
-		if err := json.Unmarshal(b, &k.acc); err != nil {
-			return err, ""
+	if iri, ok := dat.UserData.(string); ok {
+		accessActors, cnt, err := k.l.LoadActors(as.IRI(iri))
+		if err != nil {
+			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
 		}
+		if cnt == 0 {
+			return errors.Unauthorizedf("Unable to validate actor from Bearer token"), ""
+		}
+		act, err := ToPerson(accessActors.First())
+		if err != nil {
+			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
+		}
+		k.acc = *act
 	} else {
 		return errors.Unauthorizedf("unable to load from bearer"), ""
 	}
@@ -191,7 +200,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 		if strings.Contains(auth, "Bearer") {
 			// check OAuth2 bearer if present
 			method = "oauth2"
-			v := oauthLoader{acc: acct, s: s.os}
+			v := oauthLoader{acc: acct, s: s.os, l: s.st}
 			v.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
 				acct = v.acc

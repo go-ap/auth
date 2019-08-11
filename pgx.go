@@ -43,7 +43,7 @@ type cl struct {
 	Id          string
 	Secret      string
 	RedirectUri string
-	Extra       json.RawMessage
+	Extra       interface{}
 }
 
 // GetClient loads the client by id
@@ -140,7 +140,7 @@ type auth struct {
 	RedirectURI string
 	State       string
 	CreatedAt   time.Time
-	Extra       json.RawMessage
+	Extra       interface{}
 }
 
 // LoadAuthorize looks up AuthorizeData by a code.
@@ -254,7 +254,7 @@ type acc struct {
 	Scope        string
 	RedirectURI  string
 	CreatedAt    time.Time
-	Extra        json.RawMessage
+	Extra        interface{}
 }
 
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.

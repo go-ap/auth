@@ -88,7 +88,16 @@ func ToPerson(it activitystreams.Item) (*Person, error) {
 	}
 	ob, err := activitypub.ToPerson(it)
 	if err != nil {
-		return nil, err
+		ob, err := activitystreams.ToObject(it)
+		if err != nil {
+			return nil, err
+		}
+		p := Person{
+			Person:    activitypub.Person{
+				Parent:            *ob,
+			},
+		}
+		return &p, err
 	}
 	p := Person{}
 	p.Person = *ob
