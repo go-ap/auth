@@ -19,7 +19,7 @@ type boltStorage struct {
 	errFn loggerFn
 }
 
-type Config struct {
+type BoltConfig struct {
 	Path       string
 	BucketName string
 	LogFn      loggerFn
@@ -60,7 +60,7 @@ func BootstrapBoltDB(path string, rootBucket []byte) error {
 }
 
 // New returns a new postgres storage instance.
-func NewBoltDBStore(c Config) *boltStorage {
+func NewBoltDBStore(c BoltConfig) *boltStorage {
 	return &boltStorage{
 		path:  c.Path,
 		root:  []byte(c.BucketName),
@@ -80,10 +80,10 @@ func (s *boltStorage) Clone() osin.Storage {
 
 // Close the resources the boltStorage potentially holds (using Clone for example)
 func (s *boltStorage) Close() {
-	if s.d != nil {
-		s.d.Close()
+	if s.d == nil {
+		return
 	}
-	s.d = nil
+	s.d.Close()
 }
 
 func (s *boltStorage) Open() error {

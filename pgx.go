@@ -10,19 +10,35 @@ import (
 	"time"
 )
 
+type PgConfig struct {
+	Enabled bool
+	Host    string
+	Port    int64
+	User    string
+	Pw      string
+	Name    string
+	LogFn   loggerFn
+	ErrFn   loggerFn
+}
+
 // Storage implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
 type pgStorage struct {
 	db    *pgx.Conn
+	conf  PgConfig
 	logFn loggerFn
 	errFn loggerFn
 }
 
 // New returns a new postgres storage instance.
-func NewPgDBStore() *pgStorage {
-	return &pgStorage{}
+func NewPgDBStore(c PgConfig) *pgStorage {
+	return &pgStorage{
+		conf: c,
+		logFn: c.LogFn,
+		errFn: c.ErrFn,
+	}
 }
 
-func BootstrapPgDB(db  *pgx.Conn, cl osin.Client) error {
+func BootstrapPgDB(db *pgx.Conn, cl osin.Client) error {
 	return nil
 }
 
@@ -36,6 +52,9 @@ func (s *pgStorage) Clone() osin.Storage {
 
 // Close the resources the Storage potentially holds (using Clone for example)
 func (s *pgStorage) Close() {
+	if s.db == nil {
+		return
+	}
 	s.db.Close()
 }
 
@@ -44,6 +63,25 @@ type cl struct {
 	Secret      string
 	RedirectUri string
 	Extra       interface{}
+}
+func openConn(c pgx.ConnConfig) (*pgx.Conn, error) {
+	return pgx.Connect(c)
+}
+
+func (s *pgStorage) Open() error {
+	var err error
+	s.db, err = pgx.Connect(pgx.ConnConfig{
+		Host:     s.conf.Host,
+		Port:     uint16(s.conf.Port),
+		Database: s.conf.Name,
+		User:     s.conf.User,
+		Password: s.conf.Pw,
+		//Logger:   log.,
+	})
+	if err != nil {
+		return errors.Annotatef(err, "could not open db")
+	}
+	return nil
 }
 
 // GetClient loads the client by id
@@ -55,7 +93,7 @@ func (s *pgStorage) GetClient(id string) (osin.Client, error) {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "select"}, "%s", err)
-		return &c, errors.Annotatef(err, "DB query error")
+		return &c, errors.Annotatef(err, "Storage query error")
 	}
 	c.Id = cl.Id
 	c.Secret = cl.Secret
