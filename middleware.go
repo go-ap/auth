@@ -18,12 +18,10 @@ import (
 	"strings"
 )
 
-const ActivityStreamsPublicNS = as.IRI("https://www.w3.org/ns/activitystreams#Public")
-
 var AnonymousActor = Person{
 	Person: activitypub.Person{
 		Parent: as.Person{
-			ID:   as.ObjectID(ActivityStreamsPublicNS),
+			ID:   as.ObjectID(as.PublicNS),
 			Type: as.PersonType,
 			Name: as.NaturalLanguageValues{
 				as.LangRefValue{

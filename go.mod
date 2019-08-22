@@ -5,11 +5,11 @@ go 1.12
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/buger/jsonparser v0.0.0-20181023193515-52c6e1462ebd
-	github.com/go-ap/activitypub v0.0.0-20190621152420-5cbd95f8c69b
-	github.com/go-ap/activitystreams v0.0.0-20190621152349-7d4dd99336d5
-	github.com/go-ap/errors v0.0.0-20190621154420-19e59a62cbd5
-	github.com/go-ap/handlers v0.0.0-20190630180016-6b4f127fefe8
-	github.com/go-ap/storage v0.0.0-20190630174915-381f9e8bdbb8
+	github.com/go-ap/activitypub v0.0.0-20190822190331-776b00ec04df
+	github.com/go-ap/activitystreams v0.0.0-20190822191640-1ef5c83a05a0
+	github.com/go-ap/errors v0.0.0-20190822190434-e3f9a52fe6be
+	github.com/go-ap/handlers v0.0.0-20190822190457-af82f22cd485
+	github.com/go-ap/storage v0.0.0-20190822190626-8b12cdeca592
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/jackc/pgx v3.5.0+incompatible
 	github.com/openshift/osin v1.0.1
