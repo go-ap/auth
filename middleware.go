@@ -187,8 +187,8 @@ func ActorContext(ctx context.Context) (Person, bool) {
 
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either as
 // an OAuth2 or HTTP Signatures:
-//   For OAuth2 it tries to load the matching local Actor and use it further in the processing logic
-//   For HTTP Signatures it tries to load the federated Actor and use it further in the processing logic
+//   For OAuth2 it tries to load the matching local actor and use it further in the processing logic
+//   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
 func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 	acct := AnonymousActor
 	if auth := r.Header.Get("Authorization"); auth != "" {

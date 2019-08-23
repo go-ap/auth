@@ -4,6 +4,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/go-ap/activitypub"
 	"github.com/go-ap/activitystreams"
+	"github.com/go-ap/errors"
 )
 
 // PublicKey holds the ActivityPub compatible public key data
@@ -93,8 +94,8 @@ func ToPerson(it activitystreams.Item) (*Person, error) {
 			return nil, err
 		}
 		p := Person{
-			Person:    activitypub.Person{
-				Parent:            *ob,
+			Person: activitypub.Person{
+				Parent: *ob,
 			},
 		}
 		return &p, err
@@ -113,4 +114,18 @@ func ToObject(it activitystreams.Item) (*activitystreams.Object, error) {
 		return &o.Parent, nil
 	}
 	return activitystreams.ToObject(it)
+}
+
+type withPersonFn func(*Person) error
+
+// OnPerson
+func OnPerson(it activitystreams.Item, fn withPersonFn) error {
+	if !activitystreams.ActorTypes.Contains(it.GetType()) {
+		return errors.Newf("%T[%s] can't be converted to Person", it, it.GetType())
+	}
+	pers, err := ToPerson(it)
+	if err != nil {
+		return err
+	}
+	return fn(pers)
 }
