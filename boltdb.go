@@ -486,52 +486,57 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 			s.errFn(logrus.Fields{"code": code}, err.Error())
 			return nil
 		}
-		auth := auth{}
+		if access.Authorize != "" {
+			auth := auth{}
 
-		rawAuth := authB.Get([]byte(access.Authorize))
-		if rawAuth != nil {
-			err := errors.Newf("Invalid authorize data")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return nil
-		}
-		if err := json.Unmarshal(rawAuth, &auth); err != nil {
-			err := errors.Annotatef(err, "Unable to unmarshal authorization object")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return nil
-		}
-		data := osin.AuthorizeData{
-			Code:        auth.Code,
-			ExpiresIn:   int32(auth.ExpiresIn),
-			Scope:       auth.Scope,
-			RedirectUri: auth.RedirectURI,
-			State:       auth.State,
-			CreatedAt:   auth.CreatedAt,
-			UserData:    auth.Extra,
-		}
+			rawAuth := authB.Get([]byte(access.Authorize))
+			if rawAuth != nil {
+				err := errors.Newf("Invalid authorize data")
+				s.errFn(logrus.Fields{"code": code}, err.Error())
+				return nil
+			}
+			if err := json.Unmarshal(rawAuth, &auth); err != nil {
+				err := errors.Annotatef(err, "Unable to unmarshal authorization object")
+				s.errFn(logrus.Fields{"code": code}, err.Error())
+				return nil
+			}
 
-		if data.ExpireAt().Before(time.Now()) {
-			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
-			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return nil
-		}
-		var prevAccess acc
-		rawPrev := ab.Get([]byte(access.Previous))
-		if err := json.Unmarshal(rawPrev, &prevAccess); err != nil {
-			err := errors.Annotatef(err, "Unable to unmarshal previous access object")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
-			return nil
-		}
-		prev := osin.AccessData{}
-		prev.AccessToken = prevAccess.AccessToken
-		prev.RefreshToken = prevAccess.RefreshToken
-		prev.ExpiresIn = int32(prevAccess.ExpiresIn)
-		prev.Scope = prevAccess.Scope
-		prev.RedirectUri = prevAccess.RedirectURI
-		prev.CreatedAt = prevAccess.CreatedAt
-		prev.UserData = prevAccess.Extra
+			data := osin.AuthorizeData{
+				Code:        auth.Code,
+				ExpiresIn:   int32(auth.ExpiresIn),
+				Scope:       auth.Scope,
+				RedirectUri: auth.RedirectURI,
+				State:       auth.State,
+				CreatedAt:   auth.CreatedAt,
+				UserData:    auth.Extra,
+			}
 
-		result.AccessData = &prev
+			if data.ExpireAt().Before(time.Now()) {
+				err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
+				s.errFn(logrus.Fields{"code": code}, err.Error())
+				return nil
+			}
+			result.AuthorizeData = &data
+		}
+		if access.Previous != "" {
+			var prevAccess acc
+			rawPrev := ab.Get([]byte(access.Previous))
+			if err := json.Unmarshal(rawPrev, &prevAccess); err != nil {
+				err := errors.Annotatef(err, "Unable to unmarshal previous access object")
+				s.errFn(logrus.Fields{"code": code}, err.Error())
+				return nil
+			}
+			prev := osin.AccessData{}
+			prev.AccessToken = prevAccess.AccessToken
+			prev.RefreshToken = prevAccess.RefreshToken
+			prev.ExpiresIn = int32(prevAccess.ExpiresIn)
+			prev.Scope = prevAccess.Scope
+			prev.RedirectUri = prevAccess.RedirectURI
+			prev.CreatedAt = prevAccess.CreatedAt
+			prev.UserData = prevAccess.Extra
 
+			result.AccessData = &prev
+		}
 		return nil
 	})
 
