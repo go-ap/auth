@@ -443,6 +443,9 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 			return errors.Newf("Invalid bucket %s/%s", s.root, accessBucket)
 		}
 		raw := ab.Get([]byte(code))
+		if raw == nil {
+			return errors.Newf("Unable to load authorize information for %s/%s/%s", s.root, accessBucket, code)
+		}
 		if err := json.Unmarshal(raw, &access); err != nil {
 			return errors.Annotatef(err, "Unable to unmarshal access object")
 		}
