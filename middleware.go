@@ -218,14 +218,21 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 		}
 		if err != nil {
 			// TODO(marius): fix this challenge passing
-			err = errors.NewUnauthorized(err, "").Challenge(challenge)
-			s.l.WithFields(logrus.Fields{
-				"id":        acct.GetID(),
+			err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
+			errContext := logrus.Fields{
 				"auth":      r.Header.Get("Authorization"),
 				"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
-				"err":       err,
+				"err":       err.Error(),
 				"challenge": challenge,
-			}).Warn("Invalid HTTP Authorization")
+			}
+			if acct.GetID() != nil {
+				errContext["id"] = *acct.GetID()
+			}
+			if challenge != "" {
+				errContext["challenge"] = challenge
+			}
+
+			s.l.WithFields(errContext).Warn("Invalid HTTP Authorization")
 			return acct, err
 		} else {
 			// TODO(marius): Add actor's host to the logging
