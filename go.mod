@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/buger/jsonparser v0.0.0-20181023193515-52c6e1462ebd
-	github.com/go-ap/activitypub v0.0.0-20190829141911-75e0ad45ba46
+	github.com/go-ap/activitypub v0.0.0-20190909141650-c86afa1fbedb
 	github.com/go-ap/activitystreams v0.0.0-20190823194947-c9c6d2f72097
 	github.com/go-ap/errors v0.0.0-20190904113336-a616ddc7f681
 	github.com/go-ap/handlers v0.0.0-20190823195738-ecdf348916f9
