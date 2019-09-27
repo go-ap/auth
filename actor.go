@@ -95,7 +95,7 @@ func ToPerson(it activitystreams.Item) (*Person, error) {
 		}
 		p := Person{
 			Person: activitypub.Person{
-				Parent: *ob,
+				Parent: activitypub.Object { Parent: *ob },
 			},
 		}
 		return &p, err
@@ -106,14 +106,14 @@ func ToPerson(it activitystreams.Item) (*Person, error) {
 }
 
 // ToObject
-func ToObject(it activitystreams.Item) (*activitystreams.Object, error) {
+func ToObject(it activitystreams.Item) (*activitypub.Object, error) {
 	switch o := it.(type) {
 	case *Person:
 		return &o.Parent, nil
 	case Person:
 		return &o.Parent, nil
 	}
-	return activitystreams.ToObject(it)
+	return activitypub.ToObject(it)
 }
 
 type withPersonFn func(*Person) error

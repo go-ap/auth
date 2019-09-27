@@ -20,13 +20,15 @@ import (
 
 var AnonymousActor = Person{
 	Person: activitypub.Person{
-		Parent: as.Person{
-			ID:   as.ObjectID(as.PublicNS),
-			Type: as.PersonType,
-			Name: as.NaturalLanguageValues{
-				as.LangRefValue{
-					Ref:   as.NilLangRef,
-					Value: "Anonymous",
+		Parent: activitypub.Object{
+			Parent: as.Object{
+				ID:   as.ObjectID(as.PublicNS),
+				Type: as.PersonType,
+				Name: as.NaturalLanguageValues{
+					as.LangRefValue{
+						Ref:   as.NilLangRef,
+						Value: "Anonymous",
+					},
 				},
 			},
 		},
