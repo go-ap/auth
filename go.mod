@@ -6,10 +6,10 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/buger/jsonparser v0.0.0-20181023193515-52c6e1462ebd
 	github.com/cockroachdb/apd v1.1.0 // indirect
-	github.com/go-ap/activitypub v0.0.0-20190927133520-ed06508b7b31
-	github.com/go-ap/activitystreams v0.0.0-20190924112949-06f068288896
+	github.com/go-ap/activitypub v0.0.0-20191004142926-16f08e747d52
+	github.com/go-ap/activitystreams v0.0.0-20191004142722-aa26e536d97c
 	github.com/go-ap/errors v0.0.0-20190912092905-f53d51859c48
-	github.com/go-ap/storage v0.0.0-20190909183853-07b6c15efd97
+	github.com/go-ap/storage v0.0.0-20191004143127-052f9a78e353
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.5.0+incompatible
