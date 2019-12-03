@@ -1,6 +1,7 @@
 package auth
 
 import (
+	pub "github.com/go-ap/activitypub"
 	"github.com/go-ap/activitypub/client"
 	"github.com/go-ap/storage"
 	"github.com/go-chi/chi"
@@ -9,7 +10,7 @@ import (
 )
 
 type Account struct {
-	actor Person
+	actor pub.Actor
 }
 
 func (a *Account) IsLogged() bool {
@@ -28,7 +29,7 @@ type Server struct {
 func New(url string, os *osin.Server, st storage.ActorLoader, l logrus.FieldLogger) *Server {
 	return &Server{
 		baseURL: url,
-		account: Account{actor:AnonymousActor},
+		account: Account{actor: AnonymousActor},
 		os:      os,
 		cl:      client.NewClient(),
 		st:      st,
@@ -45,4 +46,3 @@ func (s Server) Routes(r chi.Router) chi.Routes {
 		r.Post("/token", s.Token)
 	})
 }
-

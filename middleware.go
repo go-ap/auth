@@ -6,9 +6,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/go-ap/activitypub"
+	pub "github.com/go-ap/activitypub"
 	"github.com/go-ap/activitypub/client"
-	as "github.com/go-ap/activitystreams"
 	"github.com/go-ap/errors"
 	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"
@@ -18,19 +17,13 @@ import (
 	"strings"
 )
 
-var AnonymousActor = Person{
-	Person: activitypub.Person{
-		Parent: activitypub.Object{
-			Parent: as.Object{
-				ID:   as.ObjectID(as.PublicNS),
-				Type: as.PersonType,
-				Name: as.NaturalLanguageValues{
-					as.LangRefValue{
-						Ref:   as.NilLangRef,
-						Value: "Anonymous",
-					},
-				},
-			},
+var AnonymousActor = pub.Actor{
+	ID:   pub.ObjectID(pub.PublicNS),
+	Type: pub.ActorType,
+	Name: pub.NaturalLanguageValues{
+		pub.LangRefValue{
+			Ref:   pub.NilLangRef,
+			Value: "Anonymous",
 		},
 	},
 }
@@ -39,26 +32,26 @@ type keyLoader struct {
 	baseIRI string
 	logFn   func(string, ...interface{})
 	realm   string
-	acc     Person
+	acc     pub.Actor
 	l       st.ActorLoader
 	c       client.Client
 }
 
-func loadFederatedActor(c client.Client, id as.IRI) (Person, error) {
+func loadFederatedActor(c client.Client, id pub.IRI) (pub.Actor, error) {
 	it, err := c.LoadIRI(id)
 	if err != nil {
 		return AnonymousActor, err
 	}
-	if acct, ok := it.(*Person); ok {
+	if acct, ok := it.(*pub.Actor); ok {
 		return *acct, nil
 	}
-	if acct, ok := it.(Person); ok {
+	if acct, ok := it.(pub.Actor); ok {
 		return acct, nil
 	}
 	return AnonymousActor, nil
 }
 
-func validateLocalIRI(i as.IRI) error {
+func validateLocalIRI(i pub.IRI) error {
 	if strings.Contains(i.String(), "Config.BaseURL") {
 		return nil
 	}
@@ -68,7 +61,7 @@ func validateLocalIRI(i as.IRI) error {
 func (k *keyLoader) GetKey(id string) interface{} {
 	var err error
 
-	iri := as.IRI(id)
+	iri := pub.IRI(id)
 	u, err := iri.URL()
 	if err != nil {
 		return err
@@ -86,7 +79,7 @@ func (k *keyLoader) GetKey(id string) interface{} {
 			return nil
 		}
 		actor := actors.First()
-		if acct, err := ToPerson(actor); err == nil {
+		if acct, err := pub.ToActor(actor); err == nil {
 			k.acc = *acct
 		}
 	} else {
@@ -98,7 +91,7 @@ func (k *keyLoader) GetKey(id string) interface{} {
 		}
 	}
 
-	obj, err := ToPerson(k.acc)
+	obj, err := pub.ToActor(k.acc)
 	if err != nil {
 		k.logFn("unable to load actor %s", err)
 		return nil
@@ -120,7 +113,7 @@ func (k *keyLoader) GetKey(id string) interface{} {
 
 type oauthLoader struct {
 	logFn func(string, ...interface{})
-	acc   Person
+	acc   pub.Actor
 	s     *osin.Server
 	l     st.ActorLoader
 }
@@ -132,14 +125,14 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 		return err, ""
 	}
 	if iri, ok := dat.UserData.(string); ok {
-		accessActors, cnt, err := k.l.LoadActors(as.IRI(iri))
+		accessActors, cnt, err := k.l.LoadActors(pub.IRI(iri))
 		if err != nil {
 			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
 		}
 		if cnt == 0 {
 			return errors.Unauthorizedf("Unable to validate actor from Bearer token"), ""
 		}
-		act, err := ToPerson(accessActors.First())
+		act, err := pub.ToActor(accessActors.First())
 		if err != nil {
 			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
 		}
@@ -176,22 +169,22 @@ type CtxtKey string
 var ActorKey = CtxtKey("__actor")
 
 // ActorContext
-func ActorContext(ctx context.Context) (Person, bool) {
+func ActorContext(ctx context.Context) (pub.Actor, bool) {
 	ctxVal := ctx.Value(ActorKey)
-	if p, ok := ctxVal.(Person); ok {
+	if p, ok := ctxVal.(pub.Actor); ok {
 		return p, ok
 	}
-	if p, ok := ctxVal.(*Person); ok {
+	if p, ok := ctxVal.(*pub.Actor); ok {
 		return *p, ok
 	}
 	return AnonymousActor, false
 }
 
-// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either as
+// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either pub
 // an OAuth2 or HTTP Signatures:
 //   For OAuth2 it tries to load the matching local actor and use it further in the processing logic
 //   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
-func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
+func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 	acct := AnonymousActor
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		var err error
@@ -227,8 +220,9 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (as.Actor, error) {
 				"err":       err.Error(),
 				"challenge": challenge,
 			}
-			if acct.GetID() != nil {
-				errContext["id"] = *acct.GetID()
+			id := acct.GetID()
+			if id.IsValid() {
+				errContext["id"] = id
 			}
 			if challenge != "" {
 				errContext["challenge"] = challenge
