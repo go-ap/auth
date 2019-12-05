@@ -4,11 +4,11 @@ go 1.13
 
 require (
 	github.com/boltdb/bolt v1.3.1
-	github.com/buger/jsonparser v0.0.0-20181023193515-52c6e1462ebd
+	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
 	github.com/cockroachdb/apd v1.1.0 // indirect
-	github.com/go-ap/activitypub v0.0.0-20191203201239-b8b0448affa4
+	github.com/go-ap/activitypub v0.0.0-20191205181648-67aa065f9f6f
 	github.com/go-ap/errors v0.0.0-20191127092628-088896cbdb2b
-	github.com/go-ap/storage v0.0.0-20191203201346-0525c8403e90
+	github.com/go-ap/storage v0.0.0-20191205181758-fdd6bdb0b188
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.5.0+incompatible

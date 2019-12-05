@@ -18,7 +18,7 @@ import (
 )
 
 var AnonymousActor = pub.Actor{
-	ID:   pub.ObjectID(pub.PublicNS),
+	ID:   pub.ID(pub.PublicNS),
 	Type: pub.ActorType,
 	Name: pub.NaturalLanguageValues{
 		pub.LangRefValue{
