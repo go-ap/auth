@@ -2,7 +2,7 @@ package auth
 
 import (
 	pub "github.com/go-ap/activitypub"
-	"github.com/go-ap/activitypub/client"
+	"github.com/go-ap/client"
 	"github.com/go-ap/storage"
 	"github.com/go-chi/chi"
 	"github.com/openshift/osin"

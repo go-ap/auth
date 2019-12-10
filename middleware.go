@@ -7,7 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	pub "github.com/go-ap/activitypub"
-	"github.com/go-ap/activitypub/client"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"

@@ -7,6 +7,7 @@ require (
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/go-ap/activitypub v0.0.0-20191205181648-67aa065f9f6f
+	github.com/go-ap/client v0.0.0-20191210140833-4adf852965be
 	github.com/go-ap/errors v0.0.0-20191127092628-088896cbdb2b
 	github.com/go-ap/storage v0.0.0-20191205181758-fdd6bdb0b188
 	github.com/go-chi/chi v4.0.2+incompatible
