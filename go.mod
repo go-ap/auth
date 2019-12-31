@@ -6,7 +6,7 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
 	github.com/cockroachdb/apd v1.1.0 // indirect
-	github.com/go-ap/activitypub v0.0.0-20191222130856-db8e40c89444
+	github.com/go-ap/activitypub v0.0.0-20191231073733-46da34eebdaa
 	github.com/go-ap/client v0.0.0-20191222183513-a49cd9f438bb
 	github.com/go-ap/errors v0.0.0-20191222183928-b7ce8b9c41e0
 	github.com/go-ap/storage v0.0.0-20191222183609-e64115e84878
