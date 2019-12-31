@@ -245,7 +245,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 		Scope:       data.Scope,
 		RedirectURI: data.RedirectUri,
 		State:       data.State,
-		CreatedAt:   data.CreatedAt,
+		CreatedAt:   data.CreatedAt.UTC(),
 		Extra:       data.UserData,
 	}
 	raw, err := json.Marshal(auth)
@@ -301,7 +301,7 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		data.CreatedAt = auth.CreatedAt
 		data.UserData = auth.Extra
 
-		if data.ExpireAt().Before(time.Now()) {
+		if data.ExpireAt().Before(time.Now().UTC()) {
 			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 			s.errFn(logrus.Fields{"code": code}, err.Error())
 			return err
@@ -399,7 +399,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		ExpiresIn:    time.Duration(data.ExpiresIn),
 		Scope:        data.Scope,
 		RedirectURI:  data.RedirectUri,
-		CreatedAt:    data.CreatedAt,
+		CreatedAt:    data.CreatedAt.UTC(),
 		Extra:        data.UserData,
 	}
 	raw, err := json.Marshal(acc)
@@ -454,7 +454,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 		result.ExpiresIn = int32(access.ExpiresIn)
 		result.Scope = access.Scope
 		result.RedirectUri = access.RedirectURI
-		result.CreatedAt = access.CreatedAt
+		result.CreatedAt = access.CreatedAt.UTC()
 		result.UserData = access.Extra
 
 		c := osin.DefaultClient{}
@@ -514,7 +514,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 				UserData:    auth.Extra,
 			}
 
-			if data.ExpireAt().Before(time.Now()) {
+			if data.ExpireAt().Before(time.Now().UTC()) {
 				err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 				s.errFn(logrus.Fields{"code": code}, err.Error())
 				return nil
@@ -535,7 +535,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 			prev.ExpiresIn = int32(prevAccess.ExpiresIn)
 			prev.Scope = prevAccess.Scope
 			prev.RedirectUri = prevAccess.RedirectURI
-			prev.CreatedAt = prevAccess.CreatedAt
+			prev.CreatedAt = prevAccess.CreatedAt.UTC()
 			prev.UserData = prevAccess.Extra
 
 			result.AccessData = &prev

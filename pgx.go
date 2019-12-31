@@ -158,7 +158,7 @@ func (s *pgStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 		data.Scope,
 		data.RedirectUri,
 		data.State,
-		data.CreatedAt,
+		data.CreatedAt.UTC(),
 		extra,
 	}
 
@@ -208,7 +208,7 @@ func (s *pgStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		return nil, err
 	}
 
-	if data.ExpireAt().Before(time.Now()) {
+	if data.ExpireAt().Before(time.Now().UTC()) {
 		s.errFn(logrus.Fields{"code": code}, err.Error())
 		return nil, errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 	}
@@ -264,7 +264,7 @@ func (s *pgStorage) SaveAccess(data *osin.AccessData) (err error) {
 		return errors.Newf("data.Client must not be nil")
 	}
 
-	_, err = tx.Exec("INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", data.Client.GetId(), authorizeData.Code, prev, data.AccessToken, data.RefreshToken, data.ExpiresIn, data.Scope, data.RedirectUri, data.CreatedAt, extra)
+	_, err = tx.Exec("INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", data.Client.GetId(), authorizeData.Code, prev, data.AccessToken, data.RefreshToken, data.ExpiresIn, data.Scope, data.RedirectUri, data.CreatedAt.UTC(), extra)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
 			s.errFn(logrus.Fields{"id": data.Client.GetId()}, rbe.Error())
@@ -315,7 +315,7 @@ func (s *pgStorage) LoadAccess(code string) (*osin.AccessData, error) {
 	result.ExpiresIn = int32(acc.ExpiresIn)
 	result.Scope = acc.Scope
 	result.RedirectUri = acc.RedirectURI
-	result.CreatedAt = acc.CreatedAt
+	result.CreatedAt = acc.CreatedAt.UTC()
 	result.UserData = acc.Extra
 	client, err := s.GetClient(acc.Client)
 	if err != nil {
