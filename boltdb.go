@@ -493,14 +493,14 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 			auth := auth{}
 
 			rawAuth := authB.Get([]byte(access.Authorize))
-			if rawAuth != nil {
-				err := errors.Newf("Invalid authorize data")
-				s.errFn(logrus.Fields{"code": code}, err.Error())
+			if rawAuth == nil {
+				//err := errors.Newf("Invalid authorize data")
+				//s.errFn(logrus.Fields{"code": code}, err.Error())
 				return nil
 			}
 			if err := json.Unmarshal(rawAuth, &auth); err != nil {
-				err := errors.Annotatef(err, "Unable to unmarshal authorization object")
-				s.errFn(logrus.Fields{"code": code}, err.Error())
+				//err := errors.Annotatef(err, "Unable to unmarshal authorization object")
+				//s.errFn(logrus.Fields{"code": code}, err.Error())
 				return nil
 			}
 
