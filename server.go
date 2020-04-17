@@ -21,7 +21,7 @@ type Server struct {
 	baseURL string
 	account Account
 	os      *osin.Server
-	cl      client.Client
+	cl      client.ActivityPub
 	st      storage.ActorLoader
 	l       logrus.FieldLogger
 }
@@ -31,7 +31,7 @@ func New(url string, os *osin.Server, st storage.ActorLoader, l logrus.FieldLogg
 		baseURL: url,
 		account: Account{actor: AnonymousActor},
 		os:      os,
-		cl:      client.NewClient(),
+		cl:      client.New(),
 		st:      st,
 		l:       l,
 	}
