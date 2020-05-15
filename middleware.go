@@ -186,12 +186,13 @@ func ActorContext(ctx context.Context) (pub.Actor, bool) {
 //   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
 func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 	acct := AnonymousActor
+	var challenge string
+	var err error
+	method := "none"
+
 	if auth := r.Header.Get("Authorization"); auth != "" {
-		var err error
-		var challenge string
-		method := "none"
 		if strings.Contains(auth, "Bearer") {
-			// check OAuth2 bearer if present
+			// check OAuth2(plain) bearer if present
 			method = "oauth2"
 			v := oauthLoader{acc: acct, s: s.os, l: s.st}
 			v.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
@@ -200,7 +201,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 			}
 		}
 		if strings.Contains(auth, "Signature") {
-			// only verify http-signature if present
+			// verify http-signature if present
 			getter := keyLoader{acc: acct, l: s.st, realm: r.URL.Host, c: s.cl}
 			method = "httpSig"
 			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
@@ -211,32 +212,30 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 				acct = getter.acc
 			}
 		}
-		if err != nil {
-			// TODO(marius): fix this challenge passing
-			err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
-			errContext := logrus.Fields{
-				"auth":      r.Header.Get("Authorization"),
-				"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
-				"err":       err.Error(),
-				"challenge": challenge,
-			}
-			id := acct.GetID()
-			if id.IsValid() {
-				errContext["id"] = id
-			}
-			if challenge != "" {
-				errContext["challenge"] = challenge
-			}
-
-			s.l.WithFields(errContext).Warn("Invalid HTTP Authorization")
-			return acct, err
-		} else {
-			// TODO(marius): Add actor's host to the logging
-			s.l.WithFields(logrus.Fields{
-				"auth": method,
-				"id":   acct.GetID(),
-			}).Debug("loaded account from Authorization header")
-		}
 	}
-	return acct, nil
+	if err == nil {
+		// TODO(marius): Add actor's host to the logging
+		s.l.WithFields(logrus.Fields{
+			"auth": method,
+			"id":   acct.GetID(),
+		}).Debug("loaded account from Authorization header")
+		return acct, nil
+	}
+	// TODO(marius): fix this challenge passing
+	err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
+	errContext := logrus.Fields{
+		"auth":      r.Header.Get("Authorization"),
+		"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
+		"err":       err.Error(),
+		"challenge": challenge,
+	}
+	id := acct.GetID()
+	if id.IsValid() {
+		errContext["id"] = id
+	}
+	if challenge != "" {
+		errContext["challenge"] = challenge
+	}
+	s.l.WithFields(errContext).Warn("Invalid HTTP Authorization")
+	return acct, err
 }
