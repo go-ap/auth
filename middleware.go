@@ -120,6 +120,9 @@ type oauthLoader struct {
 
 func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	bearer := osin.CheckBearerAuth(r)
+	if bearer == nil {
+		return errors.Newf("could not load bearer token from request"), ""
+	}
 	dat, err := k.s.Storage.LoadAccess(bearer.Code)
 	if err != nil {
 		return err, ""
