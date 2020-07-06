@@ -187,13 +187,13 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 		return errors.Annotatef(err, "Unable to marshal client object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
-		rb := tx.Bucket(s.root)
-		if rb == nil {
-			return errors.Errorf("Invalid bucket %s", s.root)
+		rb, err := tx.CreateBucketIfNotExists(s.root)
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s", s.root)
 		}
-		cb := rb.Bucket([]byte(clientsBucket))
-		if cb == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
+		cb, err := rb.CreateBucketIfNotExists([]byte(clientsBucket))
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s/%s", s.root, clientsBucket)
 		}
 		return cb.Put([]byte(cl.Id), raw)
 	})
@@ -253,13 +253,13 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 		return errors.Annotatef(err, "Unable to marshal authorization object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
-		rb := tx.Bucket(s.root)
-		if rb == nil {
-			return errors.Errorf("Invalid bucket %s", s.root)
+		rb, err := tx.CreateBucketIfNotExists(s.root)
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s", s.root)
 		}
-		cb := rb.Bucket([]byte(authorizeBucket))
-		if cb == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
+		cb, err := rb.CreateBucketIfNotExists([]byte(authorizeBucket))
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s/%s", s.root, authorizeBucket)
 		}
 		return cb.Put([]byte(data.Code), raw)
 	})
@@ -407,13 +407,13 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 		return errors.Annotatef(err, "Unable to marshal access object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
-		rb := tx.Bucket(s.root)
-		if rb == nil {
-			return errors.Errorf("Invalid bucket %s", s.root)
+		rb, err := tx.CreateBucketIfNotExists(s.root)
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s", s.root)
 		}
-		cb := rb.Bucket([]byte(accessBucket))
-		if cb == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, accessBucket)
+		cb, err := rb.CreateBucketIfNotExists([]byte(accessBucket))
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s/%s", s.root, accessBucket)
 		}
 		return cb.Put([]byte(acc.AccessToken), raw)
 	})
@@ -626,13 +626,13 @@ func (s *boltStorage) saveRefresh(refresh, access string) (err error) {
 		return errors.Annotatef(err, "Unable to marshal refresh token object")
 	}
 	return s.d.Update(func(tx *bolt.Tx) error {
-		rb := tx.Bucket(s.root)
-		if rb == nil {
-			return errors.Errorf("Invalid bucket %s", s.root)
+		rb, err := tx.CreateBucketIfNotExists(s.root)
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s", s.root)
 		}
-		cb := rb.Bucket([]byte(refreshBucket))
-		if cb == nil {
-			return errors.Newf("Invalid bucket %s/%s", s.root, refreshBucket)
+		cb, err := rb.CreateBucketIfNotExists([]byte(refreshBucket))
+		if err != nil {
+			return errors.Annotatef(err, "Invalid bucket %s/%s", s.root, refreshBucket)
 		}
 		return cb.Put([]byte(refresh), raw)
 	})
