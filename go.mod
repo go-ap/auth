@@ -5,10 +5,10 @@ go 1.13
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/cockroachdb/apd v1.1.0 // indirect
-	github.com/go-ap/activitypub v0.0.0-20200716183822-95b4154abb3d
-	github.com/go-ap/client v0.0.0-20200716183858-cd94d5256bd2
+	github.com/go-ap/activitypub v0.0.0-20200716195446-656c40c1a789
+	github.com/go-ap/client v0.0.0-20200716195921-1f0c21684afc
 	github.com/go-ap/errors v0.0.0-20200702155720-f662512ba418
-	github.com/go-ap/storage v0.0.0-20200630120808-67027b158860
+	github.com/go-ap/storage v0.0.0-20200716195804-64439890de1d
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/uuid v1.1.1 // indirect
