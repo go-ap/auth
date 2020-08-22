@@ -1,10 +1,13 @@
 package auth
 
 import (
+	"encoding/json"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 )
 
 type fsStorage struct {
@@ -35,9 +38,94 @@ func getAbsStoragePath(p string) (string, error) {
 	return p, nil
 }
 
+func mkDirIfNotExists(p string) error {
+	if fi, err := os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(p, os.ModeDir|os.ModePerm|0700); err != nil {
+				return err
+			}
+		}
+	} else if !fi.IsDir() {
+		return errors.Errorf("path exists, and is not a folder %s", p)
+	}
+	return nil
+}
+
+func isStorageCollectionKey(p string) bool {
+	base := path.Base(p)
+	return base == clientsBucket || base == authorizeBucket || base == accessBucket || base == refreshBucket
+}
+
+const (
+	objectKey = "__raw.json"
+)
+
+func getObjectKey(p string) string {
+	return path.Join(p, objectKey)
+}
+
+func loadRawFromPath(itPath string) ([]byte, error) {
+	f, err := os.Open(itPath)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unable find path %s", itPath)
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unable stat file at path %s", itPath)
+	}
+	raw := make([]byte, fi.Size())
+	cnt, err := f.Read(raw)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unable read file at path %s", itPath)
+	}
+	if cnt != len(raw) {
+		return nil, errors.Annotatef(err, "Unable read the whole file at path %s", itPath)
+	}
+	return raw, nil
+}
+
+func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (uint, error) {
+	var err error
+	var cnt uint = 0
+	if isStorageCollectionKey(itPath) {
+		err = filepath.Walk(itPath, func(p string, info os.FileInfo, err error) error {
+			if err != nil && os.IsNotExist(err) {
+				return errors.NotFoundf("%s not found", p)
+			}
+			dirPath, _ := path.Split(p)
+			dir := strings.TrimRight(dirPath, "/")
+			if dir != itPath {
+				return nil
+			}
+			it, _ := loadRawFromPath(getObjectKey(p))
+			if it != nil {
+				if err := loaderFn(it); err == nil {
+					cnt++
+				}
+			}
+			return nil
+		})
+	} else {
+		var it []byte
+		it, err = loadRawFromPath(getObjectKey(itPath))
+		if err != nil {
+			return cnt, errors.NewNotFound(err, "not found")
+		}
+		if it != nil {
+			if err := loaderFn(it); err == nil {
+				cnt++
+			}
+		}
+	}
+	return cnt, err
+}
+
 // NewFSDBStore returns a new postgres storage instance.
 func NewFSDBStore(c FSConfig) *fsStorage {
 	p, _ := getAbsStoragePath(c.Path)
+	if err := mkDirIfNotExists(path.Clean(p)); err != nil {
+		return nil
+	}
 	return &fsStorage{
 		path:  p,
 		logFn: c.LogFn,
@@ -51,23 +139,43 @@ func (s *fsStorage) Clone() osin.Storage {
 }
 
 // Close
-func (s *fsStorage) Close() {
-}
+func (s *fsStorage) Close() {}
 
 // Open
 func (s *fsStorage) Open() error {
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
 // ListClients
 func (s *fsStorage) ListClients() ([]osin.Client, error) {
 	return nil, nil
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	clients := make([]osin.Client, 0)
+
+	_, err = s.loadFromPath(getObjectKey(clientsBucket), func(raw []byte) error {
+		cl := cl{}
+		err := json.Unmarshal(raw, &cl)
+		if err != nil {
+			return err
+		}
+		d := osin.DefaultClient{
+			Id:          cl.Id,
+			Secret:      cl.Secret,
+			RedirectUri: cl.RedirectUri,
+			UserData:    cl.Extra,
+		}
+		clients = append(clients, &d)
+		return nil
+	})
+
+	return clients, err
 }
 
-// GetClietn
+// GetClient
 func (s *fsStorage) GetClient(id string) (osin.Client, error) {
 	return nil, nil
 }
