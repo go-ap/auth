@@ -59,7 +59,7 @@ func BootstrapBoltDB(path string, rootBucket []byte) error {
 	})
 }
 
-// New returns a new postgres storage instance.
+// NewBoltDBStore returns a new postgres storage instance.
 func NewBoltDBStore(c BoltConfig) *boltStorage {
 	return &boltStorage{
 		path:  c.Path,
