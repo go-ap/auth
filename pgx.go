@@ -58,12 +58,6 @@ func (s *pgStorage) Close() {
 	s.db.Close()
 }
 
-type cl struct {
-	Id          string
-	Secret      string
-	RedirectUri string
-	Extra       interface{}
-}
 func openConn(c pgx.ConnConfig) (*pgx.Conn, error) {
 	return pgx.Connect(c)
 }
