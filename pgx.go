@@ -164,17 +164,6 @@ func (s *pgStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	return nil
 }
 
-type auth struct {
-	Client      string
-	Code        string
-	ExpiresIn   time.Duration
-	Scope       string
-	RedirectURI string
-	State       string
-	CreatedAt   time.Time
-	Extra       interface{}
-}
-
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
@@ -276,19 +265,6 @@ func (s *pgStorage) SaveAccess(data *osin.AccessData) (err error) {
 	return nil
 }
 
-type acc struct {
-	Client       string
-	Authorize    string
-	Previous     string
-	AccessToken  string
-	RefreshToken string
-	ExpiresIn    time.Duration
-	Scope        string
-	RedirectURI  string
-	CreatedAt    time.Time
-	Extra        interface{}
-}
-
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
@@ -333,10 +309,6 @@ func (s *pgStorage) RemoveAccess(code string) (err error) {
 	}
 	s.logFn(logrus.Fields{"code": code}, "removed access token")
 	return nil
-}
-
-type ref struct {
-	Access string
 }
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
