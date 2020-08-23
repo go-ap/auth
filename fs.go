@@ -171,7 +171,26 @@ func (s *fsStorage) ListClients() ([]osin.Client, error) {
 
 // GetClient
 func (s *fsStorage) GetClient(id string) (osin.Client, error) {
-	return nil, nil
+	c := osin.DefaultClient{}
+	err := s.Open()
+	if err != nil {
+		return &c, err
+	}
+	defer s.Close()
+	clientPath := path.Join(s.path, clientsBucket, id)
+	_, err = s.loadFromPath(clientPath, func(raw []byte) error {
+		cl := cl{}
+		if err := json.Unmarshal(raw, &cl); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal client object")
+		}
+		c.Id = cl.Id
+		c.Secret = cl.Secret
+		c.RedirectUri = cl.RedirectUri
+		c.UserData = cl.Extra
+		return nil
+	})
+
+	return &c, err
 }
 
 // UpdateClient

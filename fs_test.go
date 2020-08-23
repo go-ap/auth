@@ -151,3 +151,79 @@ func TestFsStorage_Clone(t *testing.T) {
 		t.Errorf("Error when cloning storage, invalid pointer returned %p: %p", s, s1)
 	}
 }
+
+func TestFsStorage_GetClient(t *testing.T) {
+	defer cleanup()
+	s := initializeStorage()
+
+	for name, tt := range loadClientTests {
+		if err := saveClients(s.path, tt.clients...); err != nil {
+			t.Logf("Unable to save clients: %s", err)
+			continue
+		}
+		for i, cl := range tt.clients {
+			name = fmt.Sprintf("%s:%d", name, i)
+			t.Run(name, func(t *testing.T) {
+				client, err := s.GetClient(cl.Id)
+				if tt.err != nil && !errors.Is(err, tt.err) {
+					t.Errorf("Error when loading clients, expected %s, received %s", tt.err, err)
+				}
+				if tt.err == nil && err != nil {
+					t.Errorf("Unexpected error when loading clients, received %s", err)
+				}
+				expected := tt.want[i]
+				if !reflect.DeepEqual(client, expected) {
+					t.Errorf("Error when loading clients, expected %#v, received %#v", expected, client)
+				}
+			})
+		}
+	}
+}
+
+func TestFsStorage_CreateClient(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_LoadAccess(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_LoadAuthorize(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_LoadRefresh(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_RemoveAccess(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_RemoveAuthorize(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_RemoveClient(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_RemoveRefresh(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_SaveAccess(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_SaveAuthorize(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestFsStorage_UpdateClient(t *testing.T) {
+	t.Skipf("TODO")
+}
+
+func TestNewFSDBStoreStore(t *testing.T) {
+	t.Skipf("TODO")
+}
