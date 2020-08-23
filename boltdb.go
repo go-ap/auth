@@ -131,8 +131,6 @@ func (s *boltStorage) ListClients() ([]osin.Client, error) {
 	return clients, err
 }
 
-const clientsBucket = "clients"
-
 // GetClient loads the client by id
 func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 	c := osin.DefaultClient{}
@@ -223,8 +221,6 @@ func (s *boltStorage) RemoveClient(id string) error {
 		return cb.Delete([]byte(id))
 	})
 }
-
-const authorizeBucket = "authorize"
 
 // SaveAuthorize saves authorize data.
 func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
@@ -419,8 +415,6 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 	})
 }
 
-const accessBucket = "access"
-
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
@@ -560,8 +554,6 @@ func (s *boltStorage) RemoveAccess(code string) (err error) {
 		return cb.Delete([]byte(code))
 	})
 }
-
-const refreshBucket = "refresh"
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
