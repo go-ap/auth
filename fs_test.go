@@ -17,23 +17,6 @@ var (
 	tempFolder = path.Join(os.TempDir(), seedFolder)
 )
 
-func cleanup() {
-	os.RemoveAll(tempFolder)
-}
-
-func TestFsStorage_Close(t *testing.T) {
-	s := fsStorage{}
-	s.Close()
-}
-
-func TestFsStorage_Open(t *testing.T) {
-	s := fsStorage{}
-	err := s.Open()
-	if err != nil {
-		t.Error("Expected nil when opening fsStorage")
-	}
-}
-
 func saveClients(base string, clients ...cl) error {
 	for _, c := range clients {
 		if err := saveClient(c, base); err != nil {
@@ -44,7 +27,7 @@ func saveClients(base string, clients ...cl) error {
 }
 
 func saveItem(it interface{}, basePath string) error {
-	if err := os.MkdirAll(basePath, os.ModeDir|os.ModePerm|0700); err != nil {
+	if err := os.MkdirAll(basePath, perm); err != nil {
 		return err
 	}
 
@@ -76,7 +59,10 @@ func saveClient(client cl, basePath string) error {
 }
 
 const perm = os.ModeDir|os.ModePerm|0700
+
 func initializeStorage() *fsStorage {
+	os.RemoveAll(tempFolder)
+
 	os.MkdirAll(path.Join(tempFolder, clientsBucket), perm)
 	os.MkdirAll(path.Join(tempFolder, accessBucket), perm)
 	os.MkdirAll(path.Join(tempFolder, authorizeBucket), perm)
@@ -85,6 +71,23 @@ func initializeStorage() *fsStorage {
 		path: tempFolder,
 	}
 	return &s
+}
+
+func cleanup() {
+	os.RemoveAll(tempFolder)
+}
+
+func TestFsStorage_Close(t *testing.T) {
+	s := fsStorage{}
+	s.Close()
+}
+
+func TestFsStorage_Open(t *testing.T) {
+	s := fsStorage{}
+	err := s.Open()
+	if err != nil {
+		t.Error("Expected nil when opening fsStorage")
+	}
 }
 
 var loadClientTests = map[string]struct {
@@ -111,7 +114,6 @@ var loadClientTests = map[string]struct {
 			err: nil,
 		},
 	}
-
 
 func TestFsStorage_ListClients(t *testing.T) {
 	defer cleanup()
@@ -180,8 +182,99 @@ func TestFsStorage_GetClient(t *testing.T) {
 	}
 }
 
+var createClientTests = map[string]struct{
+	client *osin.DefaultClient
+	err    error
+} {
+	"nil": {
+		nil,
+		nil,
+	},
+	"test-client": {
+		&osin.DefaultClient{
+			Id:          "test-client",
+			Secret:      "asd",
+			RedirectUri: "https://example.com",
+			UserData:    nil,
+		},
+		nil,
+	},
+}
+
 func TestFsStorage_CreateClient(t *testing.T) {
-	t.Skipf("TODO")
+	defer cleanup()
+	s := initializeStorage()
+
+	for name, tt := range createClientTests {
+		t.Run(name, func(t *testing.T) {
+			err := s.CreateClient(tt.client)
+			if tt.err != nil && err == nil {
+				t.Errorf("Unexpected error when calling CreateClient, received %s", err)
+			}
+			if tt.client == nil {
+				return
+			}
+			filePath := getObjectKey(path.Join(s.path, clientsBucket, tt.client.Id))
+			f, err := os.Open(filePath)
+			if err != nil {
+				t.Errorf("Unable to read %s client file: %s", filePath, err)
+			}
+			defer f.Close()
+
+			fi, _ := f.Stat()
+			raw := make([]byte, fi.Size())
+			_, err = f.Read(raw)
+			if err != nil {
+				t.Errorf("Unable to read %s client raw data: %s", filePath, err)
+			}
+			l := new(osin.DefaultClient)
+			err = json.Unmarshal(raw, l)
+			if err != nil {
+				t.Errorf("Unable to unmarshal %s client raw data: %s", filePath, err)
+			}
+			if !reflect.DeepEqual(l, tt.client) {
+				t.Errorf("Error when saving client, expected %#v, received %#v", tt.client, l)
+			}
+		})
+	}
+}
+
+func TestFsStorage_UpdateClient(t *testing.T) {
+	defer cleanup()
+	s := initializeStorage()
+
+	for name, tt := range createClientTests {
+		t.Run(name, func(t *testing.T) {
+			err := s.CreateClient(tt.client)
+			if tt.err != nil && err == nil {
+				t.Errorf("Unexpected error when calling CreateClient, received %s", err)
+			}
+			if tt.client == nil {
+				return
+			}
+			filePath := getObjectKey(path.Join(s.path, clientsBucket, tt.client.Id))
+			f, err := os.Open(filePath)
+			if err != nil {
+				t.Errorf("Unable to read %s client file: %s", filePath, err)
+			}
+			defer f.Close()
+
+			fi, _ := f.Stat()
+			raw := make([]byte, fi.Size())
+			_, err = f.Read(raw)
+			if err != nil {
+				t.Errorf("Unable to read %s client raw data: %s", filePath, err)
+			}
+			l := new(osin.DefaultClient)
+			err = json.Unmarshal(raw, l)
+			if err != nil {
+				t.Errorf("Unable to unmarshal %s client raw data: %s", filePath, err)
+			}
+			if !reflect.DeepEqual(l, tt.client) {
+				t.Errorf("Error when saving client, expected %#v, received %#v", tt.client, l)
+			}
+		})
+	}
 }
 
 func TestFsStorage_LoadAccess(t *testing.T) {
@@ -217,10 +310,6 @@ func TestFsStorage_SaveAccess(t *testing.T) {
 }
 
 func TestFsStorage_SaveAuthorize(t *testing.T) {
-	t.Skipf("TODO")
-}
-
-func TestFsStorage_UpdateClient(t *testing.T) {
 	t.Skipf("TODO")
 }
 

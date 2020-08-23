@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"path/filepath"
@@ -193,19 +194,83 @@ func (s *fsStorage) GetClient(id string) (osin.Client, error) {
 	return &c, err
 }
 
+func createFolderIfNotExists(p string) error {
+	if _, err := os.Open(p); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		if err = os.MkdirAll(p, os.ModeDir|os.ModePerm|0770); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func putItem(basePath string, it interface{}) error {
+	raw, err := json.Marshal(it)
+	if err != nil {
+		return errors.Annotatef(err, "Unable to marshal %T", it)
+	}
+	return putRaw(basePath, raw)
+}
+
+func putRaw(basePath string, raw []byte) error {
+	filePath := getObjectKey(basePath)
+	f, err := os.Open(filePath)
+	if err != nil && os.IsNotExist(err){
+		f, err = os.Create(filePath)
+	}
+	if err != nil {
+		return errors.Annotatef(err, "Unable to save data to path %s", filePath)
+	}
+	defer f.Close()
+	n, err := f.Write(raw)
+	if n != len(raw) {
+		return errors.Newf("Unable to save all data to path %s, only saved %d bytes", filePath, n)
+	}
+	return err
+}
+
 // UpdateClient
 func (s *fsStorage) UpdateClient(c osin.Client) error {
-	return nil
+	if interfaceIsNil(c) {
+		return nil
+	}
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open fs storage")
+	}
+	defer s.Close()
+	if err != nil {
+		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		return errors.Annotatef(err, "Invalid user-data")
+	}
+	cl := cl{
+		Id:          c.GetId(),
+		Secret:      c.GetSecret(),
+		RedirectUri: c.GetRedirectUri(),
+		Extra:       c.GetUserData(),
+	}
+	clientPath := path.Join(s.path, clientsBucket, cl.Id)
+	if err = createFolderIfNotExists(clientPath); err != nil {
+		return errors.Annotatef(err, "Invalid path %s", clientPath)
+	}
+	return putItem(clientPath, cl)
 }
 
 // CreateClient
 func (s *fsStorage) CreateClient(c osin.Client) error {
-	return nil
+	return s.UpdateClient(c)
 }
 
 // RemoveClient
 func (s *fsStorage) RemoveClient(id string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open fs storage")
+	}
+	defer s.Close()
+	return os.RemoveAll(path.Join(s.path, clientsBucket, id))
 }
 
 // SaveAuthorize saves authorize data.
@@ -220,7 +285,12 @@ func (s *fsStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *fsStorage) RemoveAuthorize(code string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open fs storage")
+	}
+	defer s.Close()
+	return os.RemoveAll(path.Join(s.path, authorizeBucket, code))
 }
 
 // SaveAccess writes AccessData.
@@ -234,8 +304,13 @@ func (s *fsStorage) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 // RemoveAccess revokes or deletes an AccessData.
-func (s *fsStorage) RemoveAccess(code string) (err error) {
-	return nil
+func (s *fsStorage) RemoveAccess(code string) error {
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open fs storage")
+	}
+	defer s.Close()
+	return os.RemoveAll(path.Join(s.path, accessBucket, code))
 }
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
@@ -245,5 +320,10 @@ func (s *fsStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *fsStorage) RemoveRefresh(code string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open fs storage")
+	}
+	defer s.Close()
+	return os.RemoveAll(path.Join(s.path, refreshBucket, code))
 }
