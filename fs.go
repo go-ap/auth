@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 )
 
 type fsStorage struct {
@@ -170,16 +171,9 @@ func (s *fsStorage) ListClients() ([]osin.Client, error) {
 	return clients, err
 }
 
-// GetClient
-func (s *fsStorage) GetClient(id string) (osin.Client, error) {
-	c := osin.DefaultClient{}
-	err := s.Open()
-	if err != nil {
-		return &c, err
-	}
-	defer s.Close()
-	clientPath := path.Join(s.path, clientsBucket, id)
-	_, err = s.loadFromPath(clientPath, func(raw []byte) error {
+func (s *fsStorage) loadClientFromPath(clientPath string) (osin.Client, error){
+	c := new(osin.DefaultClient)
+	_, err := s.loadFromPath(clientPath, func(raw []byte) error {
 		cl := cl{}
 		if err := json.Unmarshal(raw, &cl); err != nil {
 			return errors.Annotatef(err, "Unable to unmarshal client object")
@@ -190,8 +184,17 @@ func (s *fsStorage) GetClient(id string) (osin.Client, error) {
 		c.UserData = cl.Extra
 		return nil
 	})
+	return c, err
+}
 
-	return &c, err
+// GetClient
+func (s *fsStorage) GetClient(id string) (osin.Client, error) {
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return s.loadClientFromPath(path.Join(s.path, clientsBucket, id))
 }
 
 func createFolderIfNotExists(p string) error {
@@ -275,12 +278,76 @@ func (s *fsStorage) RemoveClient(id string) error {
 
 // SaveAuthorize saves authorize data.
 func (s *fsStorage) SaveAuthorize(data *osin.AuthorizeData) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open boldtb")
+	}
+	defer s.Close()
+	if err != nil {
+		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		return errors.Annotatef(err, "Invalid user-data")
+	}
+
+	auth := auth{
+		Client:      data.Client.GetId(),
+		Code:        data.Code,
+		ExpiresIn:   time.Duration(data.ExpiresIn),
+		Scope:       data.Scope,
+		RedirectURI: data.RedirectUri,
+		State:       data.State,
+		CreatedAt:   data.CreatedAt.UTC(),
+		Extra:       data.UserData,
+	}
+	authorizePath := path.Join(s.path, authorizeBucket, auth.Code)
+	if err = createFolderIfNotExists(authorizePath); err != nil {
+		return errors.Annotatef(err, "Invalid path %s", authorizePath)
+	}
+	return putItem(authorizePath, auth)
+}
+
+func (s *fsStorage) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData, error) {
+	data := new(osin.AuthorizeData)
+	_, err := s.loadFromPath(authPath, func(raw []byte) error {
+		auth := auth{}
+		if err := json.Unmarshal(raw, &auth); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal client object")
+		}
+		data.Code = auth.Code
+		data.ExpiresIn = int32(auth.ExpiresIn)
+		data.Scope = auth.Scope
+		data.RedirectUri = auth.RedirectURI
+		data.State = auth.State
+		data.CreatedAt = auth.CreatedAt
+		data.UserData = auth.Extra
+
+		if data.ExpireAt().Before(time.Now().UTC()) {
+			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
+			s.errFn(logrus.Fields{"code": auth.Code}, err.Error())
+			return err
+		}
+		cl, err := s.loadClientFromPath(path.Join(s.path, clientsBucket, auth.Client))
+		if err != nil {
+			return err
+		}
+		data.Client = &osin.DefaultClient{
+			Id:          cl.GetId(),
+			Secret:      cl.GetSecret(),
+			RedirectUri: cl.GetRedirectUri(),
+			UserData:    cl.GetUserData(),
+		}
+		return nil
+	})
+	return data, err
 }
 
 // LoadAuthorize looks up AuthorizeData by a code.
 func (s *fsStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
-	return nil, nil
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return s.loadAuthorizeFromPath(path.Join(s.path, authorizeBucket, code))
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
@@ -295,12 +362,129 @@ func (s *fsStorage) RemoveAuthorize(code string) error {
 
 // SaveAccess writes AccessData.
 func (s *fsStorage) SaveAccess(data *osin.AccessData) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open boldtb")
+	}
+	defer s.Close()
+	prev := ""
+	authorizeData := &osin.AuthorizeData{}
+
+	if data.AccessData != nil {
+		prev = data.AccessData.AccessToken
+	}
+
+	if data.AuthorizeData != nil {
+		authorizeData = data.AuthorizeData
+	}
+
+	if err != nil {
+		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		return errors.Annotatef(err, "Invalid client user-data")
+	}
+
+	if data.RefreshToken != "" {
+		ref := ref{
+			Access: data.AccessToken,
+		}
+		refreshPath := path.Join(s.path, refreshBucket, data.RefreshToken)
+		if err = createFolderIfNotExists(refreshPath); err != nil {
+			return errors.Annotatef(err, "Invalid path %s", refreshPath)
+		}
+		if err := putItem(refreshPath, ref); err != nil {
+			return err
+		}
+	}
+
+	if data.Client == nil {
+		return errors.Newf("data.Client must not be nil")
+	}
+
+	acc := acc{
+		Client:       data.Client.GetId(),
+		Authorize:    authorizeData.Code,
+		Previous:     prev,
+		AccessToken:  data.AccessToken,
+		RefreshToken: data.RefreshToken,
+		ExpiresIn:    time.Duration(data.ExpiresIn),
+		Scope:        data.Scope,
+		RedirectURI:  data.RedirectUri,
+		CreatedAt:    data.CreatedAt.UTC(),
+		Extra:        data.UserData,
+	}
+	authorizePath := path.Join(s.path, accessBucket, acc.AccessToken)
+	if err = createFolderIfNotExists(authorizePath); err != nil {
+		return errors.Annotatef(err, "Invalid path %s", authorizePath)
+	}
+	return putItem(authorizePath, acc)
+}
+
+func (s *fsStorage) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
+	result := new(osin.AccessData)
+	_, err := s.loadFromPath(accessPath, func(raw []byte) error {
+		access := acc{}
+		if err := json.Unmarshal(raw, &access); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal access object")
+		}
+		result.AccessToken = access.AccessToken
+		result.RefreshToken = access.RefreshToken
+		result.ExpiresIn = int32(access.ExpiresIn)
+		result.Scope = access.Scope
+		result.RedirectUri = access.RedirectURI
+		result.CreatedAt = access.CreatedAt.UTC()
+		result.UserData = access.Extra
+
+		if access.Authorize != "" {
+			data, err := s.loadAuthorizeFromPath(path.Join(s.path, authorizeBucket, access.Authorize))
+			if err != nil {
+				err := errors.Annotatef(err, "Unable to load authorize data for current access token %s.", access.AccessToken)
+				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				return nil
+			}
+			if data.ExpireAt().Before(time.Now().UTC()) {
+				err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
+				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				return nil
+			}
+			result.AuthorizeData = data
+		}
+		if access.Previous != "" {
+			_, err := s.loadFromPath(accessPath, func(raw []byte) error {
+				access := acc{}
+				if err := json.Unmarshal(raw, &access); err != nil {
+					return errors.Annotatef(err, "Unable to unmarshal access object")
+				}
+				prev := new(osin.AccessData)
+				prev.AccessToken = access.AccessToken
+				prev.RefreshToken = access.RefreshToken
+				prev.ExpiresIn = int32(access.ExpiresIn)
+				prev.Scope = access.Scope
+				prev.RedirectUri = access.RedirectURI
+				prev.CreatedAt = access.CreatedAt.UTC()
+				prev.UserData = access.Extra
+				result.AccessData = prev
+				return nil
+			})
+			if err != nil {
+				err := errors.Annotatef(err, "Unable to load previous access token for %s.", access.AccessToken)
+				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				return nil
+			}
+		}
+		return nil
+	})
+	return result, err
 }
 
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 func (s *fsStorage) LoadAccess(code string) (*osin.AccessData, error) {
-	return nil, nil
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+
+	return s.loadAccessFromPath(path.Join(s.path, accessBucket, code))
 }
 
 // RemoveAccess revokes or deletes an AccessData.

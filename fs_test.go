@@ -277,11 +277,11 @@ func TestFsStorage_UpdateClient(t *testing.T) {
 	}
 }
 
-func TestFsStorage_LoadAccess(t *testing.T) {
+func TestFsStorage_LoadAuthorize(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_LoadAuthorize(t *testing.T) {
+func TestFsStorage_LoadAccess(t *testing.T) {
 	t.Skipf("TODO")
 }
 
