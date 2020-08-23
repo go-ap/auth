@@ -1,15 +1,19 @@
 package auth
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/openshift/osin"
 	"math/rand"
 	"os"
 	"path"
+	"reflect"
 	"testing"
 )
 
 var (
-	seedFolder = fmt.Sprintf("test-%d", rand.Int31())
+	seedFolder = fmt.Sprintf("test-%d", rand.Int())
 	tempFolder = path.Join(os.TempDir(), seedFolder)
 )
 
@@ -30,16 +34,120 @@ func TestFsStorage_Open(t *testing.T) {
 	}
 }
 
-func TestFsStorage_ListClients(t *testing.T) {
-	defer cleanup()
+func saveClients(base string, clients ...cl) error {
+	for _, c := range clients {
+		if err := saveClient(c, base); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	tmp := path.Join(tempFolder, clientsBucket)
-	s := fsStorage{
+func saveItem(it interface{}, basePath string) error {
+	if err := os.MkdirAll(basePath, os.ModeDir|os.ModePerm|0700); err != nil {
+		return err
+	}
+
+	clientFile := getObjectKey(basePath)
+	f, err := os.Create(clientFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var raw []byte
+	raw, err = json.Marshal(it)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(raw)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func saveClient(client cl, basePath string) error {
+	if len(client.Id) == 0 {
+		return nil
+	}
+	testClientPath := path.Join(basePath, clientsBucket, client.Id)
+	return saveItem(client, testClientPath)
+}
+
+const perm = os.ModeDir|os.ModePerm|0700
+func initializeStorage() *fsStorage {
+	os.MkdirAll(path.Join(tempFolder, clientsBucket), perm)
+	os.MkdirAll(path.Join(tempFolder, accessBucket), perm)
+	os.MkdirAll(path.Join(tempFolder, authorizeBucket), perm)
+	os.MkdirAll(path.Join(tempFolder, refreshBucket), perm)
+	s := fsStorage {
 		path: tempFolder,
 	}
-	os.MkdirAll(tmp, os.ModeDir|os.ModePerm|0700)
-	_, err := s.ListClients()
-	if err != nil {
-		t.Errorf("Error when loading clients: %s", err)
+	return &s
+}
+
+var loadClientTests = map[string]struct {
+		clients []cl
+		want    []osin.Client
+		err     error
+	}{
+		"nil": {
+			clients: []cl{},
+			want:    []osin.Client{},
+			err:     nil,
+		},
+		"test-client-id": {
+			clients: []cl{
+				{
+					Id: "test-client-id",
+				},
+			},
+			want: []osin.Client{
+				&osin.DefaultClient{
+					Id:          "test-client-id",
+				},
+			},
+			err: nil,
+		},
+	}
+
+
+func TestFsStorage_ListClients(t *testing.T) {
+	defer cleanup()
+	s := initializeStorage()
+
+	for name, tt := range loadClientTests {
+		if err := saveClients(s.path, tt.clients...); err != nil {
+			t.Logf("Unable to save clients: %s", err)
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			clients, err := s.ListClients()
+			if tt.err != nil && !errors.Is(err, tt.err) {
+				t.Errorf("Error when loading clients, expected %s, received %s", tt.err, err)
+			}
+			if tt.err == nil && err != nil {
+				t.Errorf("Unexpected error when loading clients, received %s", err)
+			}
+			if len(clients) != len(tt.want) {
+				t.Errorf("Error when loading clients, expected %d items, received %d", len(tt.want), len(clients))
+			}
+			if !reflect.DeepEqual(clients, tt.want) {
+				t.Errorf("Error when loading clients, expected %#v, received %#v", tt.want, clients)
+			}
+		})
+	}
+}
+
+func TestFsStorage_Clone(t *testing.T) {
+	s := new(fsStorage)
+	ss := s.Clone()
+	s1, ok := ss.(*fsStorage)
+	if !ok {
+		t.Errorf("Error when cloning storage, unable to convert interface back to %T: %T", s, ss)
+	}
+	if !reflect.DeepEqual(s, s1) {
+		t.Errorf("Error when cloning storage, invalid pointer returned %p: %p", s, s1)
 	}
 }

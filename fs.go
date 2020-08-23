@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 )
 
 type fsStorage struct {
@@ -92,11 +91,7 @@ func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (ui
 			if err != nil && os.IsNotExist(err) {
 				return errors.NotFoundf("%s not found", p)
 			}
-			dirPath, _ := path.Split(p)
-			dir := strings.TrimRight(dirPath, "/")
-			if dir != itPath {
-				return nil
-			}
+
 			it, _ := loadRawFromPath(getObjectKey(p))
 			if it != nil {
 				if err := loaderFn(it); err == nil {
@@ -106,13 +101,13 @@ func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (ui
 			return nil
 		})
 	} else {
-		var it []byte
-		it, err = loadRawFromPath(getObjectKey(itPath))
+		var raw []byte
+		raw, err = loadRawFromPath(getObjectKey(itPath))
 		if err != nil {
 			return cnt, errors.NewNotFound(err, "not found")
 		}
-		if it != nil {
-			if err := loaderFn(it); err == nil {
+		if raw != nil {
+			if err := loaderFn(raw); err == nil {
 				cnt++
 			}
 		}
@@ -148,7 +143,6 @@ func (s *fsStorage) Open() error {
 
 // ListClients
 func (s *fsStorage) ListClients() ([]osin.Client, error) {
-	return nil, nil
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -156,7 +150,7 @@ func (s *fsStorage) ListClients() ([]osin.Client, error) {
 	defer s.Close()
 	clients := make([]osin.Client, 0)
 
-	_, err = s.loadFromPath(getObjectKey(clientsBucket), func(raw []byte) error {
+	_, err = s.loadFromPath(path.Join(s.path, clientsBucket), func(raw []byte) error {
 		cl := cl{}
 		err := json.Unmarshal(raw, &cl)
 		if err != nil {
