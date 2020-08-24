@@ -23,26 +23,13 @@ type FSConfig struct {
 	ErrFn loggerFn
 }
 
-func getAbsStoragePath(p string) (string, error) {
-	if !filepath.IsAbs(p) {
-		var err error
-		p, err = filepath.Abs(p)
-		if err != nil {
-			return "", err
-		}
-	}
-	if fi, err := os.Stat(p); err != nil {
-		return "", err
-	} else if !fi.IsDir() {
-		return "", errors.NotValidf("path %s is invalid for storage", p)
-	}
-	return p, nil
-}
+const defaultPerm = os.ModeDir | os.ModePerm | 0770
 
 func mkDirIfNotExists(p string) error {
+	p, _ = filepath.Abs(p)
 	if fi, err := os.Stat(p); err != nil {
 		if os.IsNotExist(err) {
-			if err = os.MkdirAll(p, os.ModeDir|os.ModePerm|0700); err != nil {
+			if err = os.MkdirAll(p, defaultPerm); err != nil {
 				return err
 			}
 		}
@@ -117,14 +104,16 @@ func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (ui
 	return cnt, err
 }
 
-// NewFSDBStore returns a new postgres storage instance.
-func NewFSDBStore(c FSConfig) *fsStorage {
-	p, _ := getAbsStoragePath(c.Path)
-	if err := mkDirIfNotExists(path.Clean(p)); err != nil {
+const folder = "oauth"
+
+// NewFSStore returns a new postgres storage instance.
+func NewFSStore(c FSConfig) *fsStorage {
+	fullPath := path.Join(path.Clean(c.Path), folder)
+	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
 	return &fsStorage{
-		path:  p,
+		path:  fullPath,
 		logFn: c.LogFn,
 		errFn: c.ErrFn,
 	}
@@ -171,7 +160,7 @@ func (s *fsStorage) ListClients() ([]osin.Client, error) {
 	return clients, err
 }
 
-func (s *fsStorage) loadClientFromPath(clientPath string) (osin.Client, error){
+func (s *fsStorage) loadClientFromPath(clientPath string) (osin.Client, error) {
 	c := new(osin.DefaultClient)
 	_, err := s.loadFromPath(clientPath, func(raw []byte) error {
 		cl := cl{}
@@ -220,7 +209,7 @@ func putItem(basePath string, it interface{}) error {
 func putRaw(basePath string, raw []byte) error {
 	filePath := getObjectKey(basePath)
 	f, err := os.Open(filePath)
-	if err != nil && os.IsNotExist(err){
+	if err != nil && os.IsNotExist(err) {
 		f, err = os.Create(filePath)
 	}
 	if err != nil {
