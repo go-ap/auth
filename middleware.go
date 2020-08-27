@@ -23,7 +23,7 @@ var AnonymousActor = pub.Actor{
 	Name: pub.NaturalLanguageValues{
 		pub.LangRefValue{
 			Ref:   pub.NilLangRef,
-			Value: "Anonymous",
+			Value: pub.Content("Anonymous"),
 		},
 	},
 }
