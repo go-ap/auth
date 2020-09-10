@@ -106,17 +106,24 @@ func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (ui
 
 const folder = "oauth"
 
-// NewFSStore returns a new postgres storage instance.
+// NewFSStore returns a new filesystem storage instance.
 func NewFSStore(c FSConfig) *fsStorage {
 	fullPath := path.Join(path.Clean(c.Path), folder)
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
-	return &fsStorage{
+	s := fsStorage{
 		path:  fullPath,
-		logFn: c.LogFn,
-		errFn: c.ErrFn,
+		logFn:   emptyLogFn,
+		errFn:   emptyLogFn,
 	}
+	if c.ErrFn != nil {
+		s.errFn = c.ErrFn
+	}
+	if c.LogFn != nil {
+		s.logFn = c.LogFn
+	}
+	return &s
 }
 
 // Clone
