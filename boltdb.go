@@ -59,14 +59,21 @@ func BootstrapBoltDB(path string, rootBucket []byte) error {
 	})
 }
 
-// NewBoltDBStore returns a new postgres storage instance.
+// NewBoltDBStore returns a new boltdb storage instance.
 func NewBoltDBStore(c BoltConfig) *boltStorage {
-	return &boltStorage{
+	s := boltStorage{
 		path:  c.Path,
 		root:  []byte(c.BucketName),
-		logFn: c.LogFn,
-		errFn: c.ErrFn,
+		logFn:   emptyLogFn,
+		errFn:   emptyLogFn,
 	}
+	if c.ErrFn != nil {
+		s.errFn = c.ErrFn
+	}
+	if c.LogFn != nil {
+		s.logFn = c.LogFn
+	}
+	return &s
 }
 
 // Clone the storage if needed. For example, using mgo, you can clone the session with session.Clone
