@@ -9,11 +9,26 @@ import (
 type loggerFn func(logrus.Fields, string, ...interface{})
 
 type logger struct {
-	l loggerFn
+	logFn loggerFn
+	errFn loggerFn
 }
 
+var emptyLogFn = func(logrus.Fields, string, ...interface{}) {}
+
 func (l logger) Printf(format string, v ...interface{}) {
-	l.l(nil, format, v...)
+	l.logFn(nil, format, v...)
+}
+func (l logger) Errorf(format string, v ...interface{}) {
+	l.errFn(nil, format, v...)
+}
+func (l logger) Warningf(format string, v ...interface{}) {
+	l.logFn(nil, format, v...)
+}
+func (l logger) Infof(format string, v ...interface{}) {
+	l.logFn(nil, format, v...)
+}
+func (l logger) Debugf(format string, v ...interface{}) {
+	l.logFn(nil, format, v...)
 }
 
 func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
@@ -22,7 +37,7 @@ func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, er
 		AccessExpiration:          2678400,
 		TokenType:                 "Bearer",
 		AllowedAuthorizeTypes:     osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN},
-		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, /*osin.CLIENT_CREDENTIALS*/ },
+		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, /*osin.CLIENT_CREDENTIALS*/},
 		ErrorStatusCode:           http.StatusForbidden,
 		AllowClientSecretInParams: false,
 		AllowGetAccessRequest:     false,
@@ -32,10 +47,13 @@ func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, er
 	}
 	s := osin.NewServer(&config, store)
 
-	// TODO(marius): implement actual logic for this
-	var log loggerFn
-	log = func(f logrus.Fields, s string, p ...interface{}) {}
+	logFn := emptyLogFn
+	if l != nil {
+		logFn = func(ctx logrus.Fields, format string, v ...interface{}) {
+			l.WithFields(ctx).Infof(format, v...)
+		}
+	}
+	s.Logger = logger{logFn: logFn}
 
-	s.Logger = logger{l: log}
 	return s, nil
 }
