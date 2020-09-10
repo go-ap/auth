@@ -31,11 +31,18 @@ type pgStorage struct {
 
 // New returns a new postgres storage instance.
 func NewPgDBStore(c PgConfig) *pgStorage {
-	return &pgStorage{
+	s := pgStorage{
 		conf: c,
-		logFn: c.LogFn,
-		errFn: c.ErrFn,
+		logFn:   emptyLogFn,
+		errFn:   emptyLogFn,
 	}
+	if c.ErrFn != nil {
+		s.errFn = c.ErrFn
+	}
+	if c.LogFn != nil {
+		s.logFn = c.LogFn
+	}
+	return &s
 }
 
 func BootstrapPgDB(db *pgx.Conn, cl osin.Client) error {
@@ -62,6 +69,13 @@ func openConn(c pgx.ConnConfig) (*pgx.Conn, error) {
 	return pgx.Connect(c)
 }
 
+type pgLogger struct {
+	logFn loggerFn
+}
+func (p pgLogger) Log(level pgx.LogLevel, msg string, data map[string]interface{}) {
+	p.logFn(data, "%s: %s", level, msg)
+}
+
 func (s *pgStorage) Open() error {
 	var err error
 	s.db, err = pgx.Connect(pgx.ConnConfig{
@@ -70,7 +84,7 @@ func (s *pgStorage) Open() error {
 		Database: s.conf.Name,
 		User:     s.conf.User,
 		Password: s.conf.Pw,
-		//Logger:   log.,
+		Logger:   pgLogger{s.logFn},
 	})
 	if err != nil {
 		return errors.Annotatef(err, "could not open db")
