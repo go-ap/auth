@@ -17,16 +17,16 @@ var (
 	tempFolder = path.Join(os.TempDir(), seedFolder)
 )
 
-func saveClients(base string, clients ...cl) error {
+func saveFsClients(base string, clients ...cl) error {
 	for _, c := range clients {
-		if err := saveClient(c, base); err != nil {
+		if err := saveFsClient(c, base); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func saveItem(it interface{}, basePath string) error {
+func saveFsItem(it interface{}, basePath string) error {
 	if err := os.MkdirAll(basePath, perm); err != nil {
 		return err
 	}
@@ -50,17 +50,17 @@ func saveItem(it interface{}, basePath string) error {
 	return nil
 }
 
-func saveClient(client cl, basePath string) error {
+func saveFsClient(client cl, basePath string) error {
 	if len(client.Id) == 0 {
 		return nil
 	}
 	testClientPath := path.Join(basePath, clientsBucket, client.Id)
-	return saveItem(client, testClientPath)
+	return saveFsItem(client, testClientPath)
 }
 
 const perm = os.ModeDir|os.ModePerm|0700
 
-func initializeStorage() *fsStorage {
+func initializeFsStorage() *fsStorage {
 	os.RemoveAll(tempFolder)
 
 	os.MkdirAll(path.Join(tempFolder, clientsBucket), perm)
@@ -117,10 +117,10 @@ var loadClientTests = map[string]struct {
 
 func TestFsStorage_ListClients(t *testing.T) {
 	defer cleanup()
-	s := initializeStorage()
+	s := initializeFsStorage()
 
 	for name, tt := range loadClientTests {
-		if err := saveClients(s.path, tt.clients...); err != nil {
+		if err := saveFsClients(s.path, tt.clients...); err != nil {
 			t.Logf("Unable to save clients: %s", err)
 			continue
 		}
@@ -156,10 +156,10 @@ func TestFsStorage_Clone(t *testing.T) {
 
 func TestFsStorage_GetClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStorage()
+	s := initializeFsStorage()
 
 	for name, tt := range loadClientTests {
-		if err := saveClients(s.path, tt.clients...); err != nil {
+		if err := saveFsClients(s.path, tt.clients...); err != nil {
 			t.Logf("Unable to save clients: %s", err)
 			continue
 		}
@@ -203,7 +203,7 @@ var createClientTests = map[string]struct{
 
 func TestFsStorage_CreateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStorage()
+	s := initializeFsStorage()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {
@@ -241,7 +241,7 @@ func TestFsStorage_CreateClient(t *testing.T) {
 
 func TestFsStorage_UpdateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStorage()
+	s := initializeFsStorage()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {

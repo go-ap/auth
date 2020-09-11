@@ -19,6 +19,7 @@ type fsStorage struct {
 
 type FSConfig struct {
 	Path  string
+	Host  string
 	LogFn loggerFn
 	ErrFn loggerFn
 }
