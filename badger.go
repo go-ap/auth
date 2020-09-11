@@ -1,19 +1,23 @@
 package auth
 
 import (
+	"encoding/json"
 	"github.com/dgraph-io/badger"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 	"path"
 	"sync"
+	"time"
 )
 
 type badgerStorage struct {
-	d       *badger.DB
-	m       sync.Mutex
-	path    string
-	logFn   loggerFn
-	errFn   loggerFn
+	d     *badger.DB
+	m     sync.Mutex
+	path  string
+	host  string
+	logFn loggerFn
+	errFn loggerFn
 }
 
 type BadgerConfig struct {
@@ -28,11 +32,13 @@ func NewBadgerStore(c FSConfig) *badgerStorage {
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
+	storPath := path.Join(fullPath, c.Host) + ".bdb"
 	b := badgerStorage{
-		path:    fullPath,
-		m:       sync.Mutex{},
-		logFn:   emptyLogFn,
-		errFn:   emptyLogFn,
+		path:  storPath,
+		host:  c.Host,
+		m:     sync.Mutex{},
+		logFn: emptyLogFn,
+		errFn: emptyLogFn,
 	}
 	if c.ErrFn != nil {
 		b.errFn = c.ErrFn
