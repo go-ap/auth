@@ -5,10 +5,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 	"path"
 	"sync"
-	"time"
 )
 
 type badgerStorage struct {
@@ -75,12 +73,46 @@ func (s *badgerStorage) Close() {
 
 // Clone
 func (s *badgerStorage) Clone() osin.Storage {
+	s.Close()
 	return s
+}
+
+func itemPath (pieces ...string) []byte {
+	return []byte(path.Join(pieces...))
+}
+
+func clientPath (id string) []byte {
+	return itemPath(clientsBucket, id)
 }
 
 // GetClient
 func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
-	return nil, nil
+	c := osin.DefaultClient{}
+	err := s.Open()
+	if err != nil {
+		return &c, err
+	}
+	defer s.Close()
+	err = s.d.View(func(tx *badger.Txn) error {
+		cl := cl{}
+		fullPath := clientPath(id)
+		it, err := tx.Get(fullPath)
+		if err != nil {
+			return errors.NewNotFound(err, "Invalid path %s", fullPath)
+		}
+		return it.Value(func(raw []byte) error {
+			if err := json.Unmarshal(raw, &cl); err != nil {
+				return errors.Annotatef(err, "Unable to unmarshal client object")
+			}
+			c.Id = cl.Id
+			c.Secret = cl.Secret
+			c.RedirectUri = cl.RedirectUri
+			c.UserData = cl.Extra
+			return nil
+		})
+	})
+
+	return &c, err
 }
 
 // SaveAuthorize
