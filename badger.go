@@ -7,6 +7,7 @@ import (
 	"github.com/openshift/osin"
 	"path"
 	"sync"
+	"time"
 )
 
 type badgerStorage struct {
@@ -77,42 +78,50 @@ func (s *badgerStorage) Clone() osin.Storage {
 	return s
 }
 
-func itemPath (pieces ...string) []byte {
+func itemPath(pieces ...string) []byte {
 	return []byte(path.Join(pieces...))
 }
 
-func clientPath (id string) []byte {
+func clientPath(id string) []byte {
 	return itemPath(clientsBucket, id)
 }
 
-// GetClient
-func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
-	c := osin.DefaultClient{}
-	err := s.Open()
-	if err != nil {
-		return &c, err
-	}
-	defer s.Close()
-	err = s.d.View(func(tx *badger.Txn) error {
-		cl := cl{}
-		fullPath := clientPath(id)
+func loadTxnClient(c *osin.DefaultClient, id string) func(tx *badger.Txn) error {
+	fullPath := clientPath(id)
+	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
 		if err != nil {
 			return errors.NewNotFound(err, "Invalid path %s", fullPath)
 		}
-		return it.Value(func(raw []byte) error {
-			if err := json.Unmarshal(raw, &cl); err != nil {
-				return errors.Annotatef(err, "Unable to unmarshal client object")
-			}
-			c.Id = cl.Id
-			c.Secret = cl.Secret
-			c.RedirectUri = cl.RedirectUri
-			c.UserData = cl.Extra
-			return nil
-		})
-	})
+		return it.Value(loadRawClient(c))
+	}
+}
 
-	return &c, err
+func loadRawClient(c *osin.DefaultClient) func(raw []byte) error {
+	return func(raw []byte) error {
+		cl := cl{}
+		if err := json.Unmarshal(raw, &cl); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal client object")
+		}
+		c.Id = cl.Id
+		c.Secret = cl.Secret
+		c.RedirectUri = cl.RedirectUri
+		c.UserData = cl.Extra
+		return nil
+	}
+}
+
+// GetClient
+func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	c := new(osin.DefaultClient)
+	if err := s.d.View(loadTxnClient(c, id)); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // SaveAuthorize
@@ -120,9 +129,58 @@ func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	return nil
 }
 
+func authorizePath(id string) []byte {
+	return itemPath(authorizeBucket, id)
+}
+func loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
+	fullPath := authorizePath(code)
+	return func(tx *badger.Txn) error {
+		it, err := tx.Get(fullPath)
+		if err != nil {
+			return errors.NotFoundf("Invalid path %s", fullPath)
+		}
+		return it.Value(loadRawAuthorize(a))
+	}
+}
+func loadRawAuthorize(a *osin.AuthorizeData) func(raw []byte) error {
+	return func(raw []byte) error {
+		auth := auth{}
+		if err := json.Unmarshal(raw, &auth); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal authorize object")
+		}
+		a.Code = auth.Code
+		a.ExpiresIn = int32(auth.ExpiresIn)
+		a.Scope = auth.Scope
+		a.RedirectUri = auth.RedirectURI
+		a.State = auth.State
+		a.CreatedAt = auth.CreatedAt
+		a.UserData = auth.Extra
+		a.Client = &osin.DefaultClient{Id: auth.Code}
+		if a.ExpireAt().Before(time.Now().UTC()) {
+			return errors.Errorf("Token expired at %s.", a.ExpireAt().String())
+		}
+		return nil
+	}
+}
+
 // LoadAuthorize
 func (s *badgerStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
-	return nil, nil
+	data := osin.AuthorizeData{}
+	err := s.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+
+	err = s.d.View(loadTxnAuthorize(&data, code))
+	if err != nil {
+		return nil, err
+	}
+	client := new(osin.DefaultClient)
+	if err = s.d.View(loadTxnClient(client, data.Client.GetId())); err == nil {
+		data.Client = client
+	}
+	return &data, err
 }
 
 // RemoveAuthorize
