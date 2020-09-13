@@ -13,7 +13,7 @@ import (
 
 func initializeBadgerStorage() *badgerStorage {
 	os.RemoveAll(tempFolder)
-	return NewBadgerStore(FSConfig{Path:  tempFolder})
+	return NewBadgerStore(BadgerConfig{Path:  tempFolder})
 }
 
 func saveBadgerClients(s *badgerStorage, clients ...cl) error {

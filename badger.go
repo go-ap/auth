@@ -22,12 +22,13 @@ type badgerStorage struct {
 
 type BadgerConfig struct {
 	Path  string
+	Host  string
 	LogFn loggerFn
 	ErrFn loggerFn
 }
 
 // NewBadgerStore returns a new badger storage instance.
-func NewBadgerStore(c FSConfig) *badgerStorage {
+func NewBadgerStore(c BadgerConfig) *badgerStorage {
 	fullPath := path.Join(path.Clean(c.Path), folder)
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
@@ -372,7 +373,7 @@ func (s *badgerStorage) LoadAccess(code string) (*osin.AccessData, error) {
 	result := new(osin.AccessData)
 	err = s.d.View(loadTxnAccess(result, code))
 
-	clientId :=  result.Client.GetId()
+	clientId := result.Client.GetId()
 	if len(clientId) > 0 {
 		client := new(osin.DefaultClient)
 		if err = s.d.View(loadTxnClient(client, result.Client.GetId())); err == nil {
