@@ -29,11 +29,11 @@ type BadgerConfig struct {
 
 // NewBadgerStore returns a new badger storage instance.
 func NewBadgerStore(c BadgerConfig) *badgerStorage {
-	fullPath := path.Join(path.Clean(c.Path), folder)
+	fullPath := path.Clean(c.Path)
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
-	storPath := path.Join(fullPath, c.Host) + ".bdb"
+	storPath := path.Join(fullPath, folder)
 	b := badgerStorage{
 		path:  storPath,
 		host:  c.Host,
@@ -84,12 +84,12 @@ func itemPath(pieces ...string) []byte {
 	return []byte(path.Join(pieces...))
 }
 
-func clientPath(id string) []byte {
-	return itemPath(clientsBucket, id)
+func (s badgerStorage) clientPath(id string) []byte {
+	return itemPath(s.host, clientsBucket, id)
 }
 
-func loadTxnClient(c *osin.DefaultClient, id string) func(tx *badger.Txn) error {
-	fullPath := clientPath(id)
+func (s badgerStorage) loadTxnClient(c *osin.DefaultClient, id string) func(tx *badger.Txn) error {
+	fullPath := s.clientPath(id)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
 		if err != nil {
@@ -120,7 +120,7 @@ func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
 	}
 	defer s.Close()
 	c := new(osin.DefaultClient)
-	if err := s.d.View(loadTxnClient(c, id)); err != nil {
+	if err := s.d.View(s.loadTxnClient(c, id)); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -147,7 +147,7 @@ func (s *badgerStorage) UpdateClient(c osin.Client) error {
 		return errors.Annotatef(err, "Unable to marshal client object")
 	}
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Set(clientPath(c.GetId()), raw)
+		return tx.Set(s.clientPath(c.GetId()), raw)
 	})
 }
 
@@ -164,12 +164,12 @@ func (s *badgerStorage) RemoveClient(id string) error {
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Delete(clientPath(id))
+		return tx.Delete(s.clientPath(id))
 	})
 }
 
-func authorizePath(code string) []byte {
-	return itemPath(authorizeBucket, code)
+func (s badgerStorage) authorizePath(code string) []byte {
+	return itemPath(s.host, authorizeBucket, code)
 }
 
 // SaveAuthorize
@@ -198,12 +198,12 @@ func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 		return errors.Annotatef(err, "Unable to marshal authorization object")
 	}
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Set(authorizePath(data.Code), raw)
+		return tx.Set(s.authorizePath(data.Code), raw)
 	})
 }
 
-func loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
-	fullPath := authorizePath(code)
+func (s badgerStorage) loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
+	fullPath := s.authorizePath(code)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
 		if err != nil {
@@ -226,7 +226,9 @@ func loadRawAuthorize(a *osin.AuthorizeData) func(raw []byte) error {
 		a.State = auth.State
 		a.CreatedAt = auth.CreatedAt
 		a.UserData = auth.Extra
-		a.Client = &osin.DefaultClient{Id: auth.Code}
+		if len(auth.Code) > 0 {
+			a.Client = &osin.DefaultClient{Id: auth.Code}
+		}
 		if a.ExpireAt().Before(time.Now().UTC()) {
 			return errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
@@ -243,13 +245,15 @@ func (s *badgerStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) 
 	}
 	defer s.Close()
 
-	err = s.d.View(loadTxnAuthorize(&data, code))
+	err = s.d.View(s.loadTxnAuthorize(&data, code))
 	if err != nil {
 		return nil, err
 	}
-	client := new(osin.DefaultClient)
-	if err = s.d.View(loadTxnClient(client, data.Client.GetId())); err == nil {
-		data.Client = client
+	if data.Client != nil {
+		client := new(osin.DefaultClient)
+		if err = s.d.View(s.loadTxnClient(client, data.Client.GetId())); err == nil {
+			data.Client = client
+		}
 	}
 	return &data, err
 }
@@ -262,12 +266,12 @@ func (s *badgerStorage) RemoveAuthorize(code string) error {
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Delete(authorizePath(code))
+		return tx.Delete(s.authorizePath(code))
 	})
 }
 
-func accessPath(code string) []byte {
-	return itemPath(accessBucket, code)
+func (s badgerStorage) accessPath(code string) []byte {
+	return itemPath(s.host, accessBucket, code)
 }
 
 // SaveAccess
@@ -295,7 +299,7 @@ func (s *badgerStorage) SaveAccess(data *osin.AccessData) error {
 
 	if data.RefreshToken != "" {
 		s.d.Update(func(tx *badger.Txn) error {
-			if err := saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
+			if err := s.saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
 				s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 				return err
 			}
@@ -324,7 +328,7 @@ func (s *badgerStorage) SaveAccess(data *osin.AccessData) error {
 		return errors.Annotatef(err, "Unable to marshal access object")
 	}
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Set(authorizePath(acc.AccessToken), raw)
+		return tx.Set(s.accessPath(acc.AccessToken), raw)
 	})
 }
 
@@ -351,8 +355,8 @@ func loadRawAccess(a *osin.AccessData) func(raw []byte) error {
 	}
 }
 
-func loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Txn) error {
-	fullPath := accessPath(token)
+func (s badgerStorage) loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Txn) error {
+	fullPath := s.accessPath(token)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
 		if err != nil {
@@ -371,24 +375,23 @@ func (s *badgerStorage) LoadAccess(code string) (*osin.AccessData, error) {
 	defer s.Close()
 
 	result := new(osin.AccessData)
-	err = s.d.View(loadTxnAccess(result, code))
+	err = s.d.View(s.loadTxnAccess(result, code))
 
-	clientId := result.Client.GetId()
-	if len(clientId) > 0 {
+	if result.Client != nil && len(result.Client.GetId()) > 0 {
 		client := new(osin.DefaultClient)
-		if err = s.d.View(loadTxnClient(client, result.Client.GetId())); err == nil {
+		if err = s.d.View(s.loadTxnClient(client, result.Client.GetId())); err == nil {
 			result.Client = client
 		}
 	}
-	if len(result.AuthorizeData.Code) > 0 {
+	if result.AuthorizeData != nil && len(result.AuthorizeData.Code) > 0 {
 		auth := new(osin.AuthorizeData)
-		if err = s.d.View(loadTxnAuthorize(auth, result.AuthorizeData.Code)); err == nil {
+		if err = s.d.View(s.loadTxnAuthorize(auth, result.AuthorizeData.Code)); err == nil {
 			result.AuthorizeData = auth
 		}
 	}
 	if result.AccessData != nil && len(result.AccessData.AccessToken) > 0 {
 		prev := new(osin.AccessData)
-		if err = s.d.View(loadTxnAccess(prev, result.AuthorizeData.Code)); err == nil {
+		if err = s.d.View(s.loadTxnAccess(prev, result.AuthorizeData.Code)); err == nil {
 			result.AccessData = prev
 		}
 	}
@@ -404,12 +407,12 @@ func (s *badgerStorage) RemoveAccess(token string) error {
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Delete(accessPath(token))
+		return tx.Delete(s.accessPath(token))
 	})
 }
 
-func refreshPath(refresh string) []byte {
-	return itemPath(refreshBucket, refresh)
+func (s badgerStorage) refreshPath(refresh string) []byte {
+	return itemPath(s.host, refreshBucket, refresh)
 }
 
 // LoadRefresh
@@ -425,11 +428,11 @@ func (s *badgerStorage) RemoveRefresh(token string) error {
 	}
 	defer s.Close()
 	return s.d.Update(func(tx *badger.Txn) error {
-		return tx.Delete(refreshPath(token))
+		return tx.Delete(s.refreshPath(token))
 	})
 }
 
-func saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
+func (s badgerStorage) saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
 	ref := ref{
 		Access: access,
 	}
@@ -437,5 +440,5 @@ func saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
 	if err != nil {
 		return errors.Annotatef(err, "Unable to marshal refresh token object")
 	}
-	return txn.Set(refreshPath(refresh), raw)
+	return txn.Set(s.refreshPath(refresh), raw)
 }
