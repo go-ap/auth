@@ -5,6 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 	"path"
 	"sync"
 	"time"
@@ -124,14 +125,82 @@ func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
 	return c, nil
 }
 
-// SaveAuthorize
-func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
-	return nil
+// UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
+func (s *badgerStorage) UpdateClient(c osin.Client) error {
+	if interfaceIsNil(c) {
+		return nil
+	}
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	cl := cl{
+		Id:          c.GetId(),
+		Secret:      c.GetSecret(),
+		RedirectUri: c.GetRedirectUri(),
+		Extra:       c.GetUserData(),
+	}
+	raw, err := json.Marshal(cl)
+	if err != nil {
+		return errors.Annotatef(err, "Unable to marshal client object")
+	}
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Set(clientPath(c.GetId()), raw)
+	})
 }
 
-func authorizePath(id string) []byte {
-	return itemPath(authorizeBucket, id)
+// CreateClient stores the client in the database and returns an error, if something went wrong.
+func (s *badgerStorage) CreateClient(c osin.Client) error {
+	return s.UpdateClient(c)
 }
+
+// RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
+func (s *badgerStorage) RemoveClient(id string) error {
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Delete(clientPath(id))
+	})
+}
+
+func authorizePath(code string) []byte {
+	return itemPath(authorizeBucket, code)
+}
+
+// SaveAuthorize
+func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open boldtb")
+	}
+	defer s.Close()
+	if err != nil {
+		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		return errors.Annotatef(err, "Invalid user-data")
+	}
+	auth := auth{
+		Client:      data.Client.GetId(),
+		Code:        data.Code,
+		ExpiresIn:   time.Duration(data.ExpiresIn),
+		Scope:       data.Scope,
+		RedirectURI: data.RedirectUri,
+		State:       data.State,
+		CreatedAt:   data.CreatedAt.UTC(),
+		Extra:       data.UserData,
+	}
+	raw, err := json.Marshal(auth)
+	if err != nil {
+		return errors.Annotatef(err, "Unable to marshal authorization object")
+	}
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Set(authorizePath(data.Code), raw)
+	})
+}
+
 func loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
 	fullPath := authorizePath(code)
 	return func(tx *badger.Txn) error {
@@ -142,6 +211,7 @@ func loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) e
 		return it.Value(loadRawAuthorize(a))
 	}
 }
+
 func loadRawAuthorize(a *osin.AuthorizeData) func(raw []byte) error {
 	return func(raw []byte) error {
 		auth := auth{}
@@ -185,22 +255,160 @@ func (s *badgerStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) 
 
 // RemoveAuthorize
 func (s *badgerStorage) RemoveAuthorize(code string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Delete(authorizePath(code))
+	})
+}
+
+func accessPath(code string) []byte {
+	return itemPath(accessBucket, code)
 }
 
 // SaveAccess
 func (s *badgerStorage) SaveAccess(data *osin.AccessData) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	prev := ""
+	authorizeData := &osin.AuthorizeData{}
+
+	if data.AccessData != nil {
+		prev = data.AccessData.AccessToken
+	}
+
+	if data.AuthorizeData != nil {
+		authorizeData = data.AuthorizeData
+	}
+
+	if err != nil {
+		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		return errors.Annotatef(err, "Invalid client user-data")
+	}
+
+	if data.RefreshToken != "" {
+		s.d.Update(func(tx *badger.Txn) error {
+			if err := saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
+				s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+				return err
+			}
+			return nil
+		})
+	}
+
+	if data.Client == nil {
+		return errors.Newf("data.Client must not be nil")
+	}
+
+	acc := acc{
+		Client:       data.Client.GetId(),
+		Authorize:    authorizeData.Code,
+		Previous:     prev,
+		AccessToken:  data.AccessToken,
+		RefreshToken: data.RefreshToken,
+		ExpiresIn:    time.Duration(data.ExpiresIn),
+		Scope:        data.Scope,
+		RedirectURI:  data.RedirectUri,
+		CreatedAt:    data.CreatedAt.UTC(),
+		Extra:        data.UserData,
+	}
+	raw, err := json.Marshal(acc)
+	if err != nil {
+		return errors.Annotatef(err, "Unable to marshal access object")
+	}
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Set(authorizePath(acc.AccessToken), raw)
+	})
+}
+
+func loadRawAccess(a *osin.AccessData) func(raw []byte) error {
+	return func(raw []byte) error {
+		access := acc{}
+		if err := json.Unmarshal(raw, &access); err != nil {
+			return errors.Annotatef(err, "Unable to unmarshal client object")
+		}
+		a.AccessToken = access.AccessToken
+		a.RefreshToken = access.RefreshToken
+		a.ExpiresIn = int32(access.ExpiresIn)
+		a.Scope = access.Scope
+		a.RedirectUri = access.RedirectURI
+		a.CreatedAt = access.CreatedAt.UTC()
+		a.UserData = access.Extra
+		if len(access.Authorize) > 0 {
+			a.AuthorizeData = &osin.AuthorizeData{Code: access.Authorize}
+		}
+		if len(access.Previous) > 0 {
+			a.AccessData = &osin.AccessData{AccessToken: access.Previous}
+		}
+		return nil
+	}
+}
+
+func loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Txn) error {
+	fullPath := accessPath(token)
+	return func(tx *badger.Txn) error {
+		it, err := tx.Get(fullPath)
+		if err != nil {
+			return errors.NewNotFound(err, "Invalid path %s", fullPath)
+		}
+		return it.Value(loadRawAccess(a))
+	}
 }
 
 // LoadAccess
-func (s *badgerStorage) LoadAccess(token string) (*osin.AccessData, error) {
-	return nil, nil
+func (s *badgerStorage) LoadAccess(code string) (*osin.AccessData, error) {
+	err := s.Open()
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+
+	result := new(osin.AccessData)
+	err = s.d.View(loadTxnAccess(result, code))
+
+	clientId :=  result.Client.GetId()
+	if len(clientId) > 0 {
+		client := new(osin.DefaultClient)
+		if err = s.d.View(loadTxnClient(client, result.Client.GetId())); err == nil {
+			result.Client = client
+		}
+	}
+	if len(result.AuthorizeData.Code) > 0 {
+		auth := new(osin.AuthorizeData)
+		if err = s.d.View(loadTxnAuthorize(auth, result.AuthorizeData.Code)); err == nil {
+			result.AuthorizeData = auth
+		}
+	}
+	if result.AccessData != nil && len(result.AccessData.AccessToken) > 0 {
+		prev := new(osin.AccessData)
+		if err = s.d.View(loadTxnAccess(prev, result.AuthorizeData.Code)); err == nil {
+			result.AccessData = prev
+		}
+	}
+
+	return result, err
 }
 
 // RemoveAccess
 func (s *badgerStorage) RemoveAccess(token string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Delete(accessPath(token))
+	})
+}
+
+func refreshPath(refresh string) []byte {
+	return itemPath(refreshBucket, refresh)
 }
 
 // LoadRefresh
@@ -210,5 +418,23 @@ func (s *badgerStorage) LoadRefresh(token string) (*osin.AccessData, error) {
 
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *badgerStorage) RemoveRefresh(token string) error {
-	return nil
+	err := s.Open()
+	if err != nil {
+		return errors.Annotatef(err, "Unable to open badger store")
+	}
+	defer s.Close()
+	return s.d.Update(func(tx *badger.Txn) error {
+		return tx.Delete(refreshPath(token))
+	})
+}
+
+func saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
+	ref := ref{
+		Access: access,
+	}
+	raw, err := json.Marshal(ref)
+	if err != nil {
+		return errors.Annotatef(err, "Unable to marshal refresh token object")
+	}
+	return txn.Set(refreshPath(refresh), raw)
 }
