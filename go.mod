@@ -5,8 +5,7 @@ go 1.13
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/cockroachdb/apd v1.1.0 // indirect
-	github.com/dgraph-io/badger v1.6.1
-	github.com/dgraph-io/badger/v2 v2.2007.2 // indirect
+	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/go-ap/activitypub v0.0.0-20200830140334-e0b519daad28
 	github.com/go-ap/client v0.0.0-20200909115600-ad8ab62d361c
 	github.com/go-ap/errors v0.0.0-20200702155720-f662512ba418
