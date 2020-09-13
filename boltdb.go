@@ -177,10 +177,6 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 		return errors.Annotatef(err, "Unable to open boldtb")
 	}
 	defer s.Close()
-	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
-		return errors.Annotatef(err, "Invalid user-data")
-	}
 	cl := cl{
 		Id:          c.GetId(),
 		Secret:      c.GetSecret(),
