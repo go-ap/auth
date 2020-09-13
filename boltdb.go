@@ -612,7 +612,7 @@ func (s *boltStorage) RemoveRefresh(code string) error {
 	})
 }
 
-func (s *boltStorage) saveRefresh(refresh, access string) (err error) {
+func (s *boltStorage) saveRefresh(refresh, access string) error {
 	ref := ref{
 		Access: access,
 	}
