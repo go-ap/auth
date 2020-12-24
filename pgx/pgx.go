@@ -1,40 +1,75 @@
-package auth
+package pgx
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/jackc/pgx"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	"time"
 )
+type cl struct {
+	Id          string
+	Secret      string
+	RedirectUri string
+	Extra       interface{}
+}
 
-type PgConfig struct {
+type auth struct {
+	Client      string
+	Code        string
+	ExpiresIn   time.Duration
+	Scope       string
+	RedirectURI string
+	State       string
+	CreatedAt   time.Time
+	Extra       interface{}
+}
+
+type acc struct {
+	Client       string
+	Authorize    string
+	Previous     string
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    time.Duration
+	Scope        string
+	RedirectURI  string
+	CreatedAt    time.Time
+	Extra        interface{}
+}
+
+type ref struct {
+	Access string
+}
+
+type Config struct {
 	Enabled bool
 	Host    string
 	Port    int64
 	User    string
 	Pw      string
 	Name    string
-	LogFn   loggerFn
-	ErrFn   loggerFn
+	LogFn   log.LoggerFn
+	ErrFn   log.LoggerFn
 }
 
 // Storage implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
-type pgStorage struct {
+type stor struct {
 	db    *pgx.Conn
-	conf  PgConfig
-	logFn loggerFn
-	errFn loggerFn
+	conf  Config
+	logFn log.LoggerFn
+	errFn log.LoggerFn
 }
 
 // New returns a new postgres storage instance.
-func NewPgDBStore(c PgConfig) *pgStorage {
-	s := pgStorage{
+func New(c Config) *stor {
+	s := stor{
 		conf: c,
-		logFn:   emptyLogFn,
-		errFn:   emptyLogFn,
+		logFn:   log.EmptyLogFn,
+		errFn:   log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -45,7 +80,7 @@ func NewPgDBStore(c PgConfig) *pgStorage {
 	return &s
 }
 
-func BootstrapPgDB(db *pgx.Conn, cl osin.Client) error {
+func Bootstrap(db *pgx.Conn, cl osin.Client) error {
 	return nil
 }
 
@@ -53,30 +88,26 @@ func BootstrapPgDB(db *pgx.Conn, cl osin.Client) error {
 // to avoid concurrent access problems.
 // This is to avoid cloning the connection at each method access.
 // Can return itself if not a problem.
-func (s *pgStorage) Clone() osin.Storage {
+func (s *stor) Clone() osin.Storage {
 	return s
 }
 
 // Close the resources the Storage potentially holds (using Clone for example)
-func (s *pgStorage) Close() {
+func (s *stor) Close() {
 	if s.db == nil {
 		return
 	}
 	s.db.Close()
 }
 
-func openConn(c pgx.ConnConfig) (*pgx.Conn, error) {
-	return pgx.Connect(c)
+type logger struct {
+	logFn log.LoggerFn
 }
-
-type pgLogger struct {
-	logFn loggerFn
-}
-func (p pgLogger) Log(level pgx.LogLevel, msg string, data map[string]interface{}) {
+func (p logger) Log(level pgx.LogLevel, msg string, data map[string]interface{}) {
 	p.logFn(data, "%s: %s", level, msg)
 }
 
-func (s *pgStorage) Open() error {
+func (s *stor) Open() error {
 	var err error
 	s.db, err = pgx.Connect(pgx.ConnConfig{
 		Host:     s.conf.Host,
@@ -84,7 +115,7 @@ func (s *pgStorage) Open() error {
 		Database: s.conf.Name,
 		User:     s.conf.User,
 		Password: s.conf.Pw,
-		Logger:   pgLogger{s.logFn},
+		Logger:   logger{s.logFn},
 	})
 	if err != nil {
 		return errors.Annotatef(err, "could not open db")
@@ -93,7 +124,7 @@ func (s *pgStorage) Open() error {
 }
 
 // GetClient loads the client by id
-func (s *pgStorage) GetClient(id string) (osin.Client, error) {
+func (s *stor) GetClient(id string) (osin.Client, error) {
 	q := "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
 	var cl cl
 	var c osin.DefaultClient
@@ -112,7 +143,7 @@ func (s *pgStorage) GetClient(id string) (osin.Client, error) {
 }
 
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
-func (s *pgStorage) UpdateClient(c osin.Client) error {
+func (s *stor) UpdateClient(c osin.Client) error {
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
@@ -127,7 +158,7 @@ func (s *pgStorage) UpdateClient(c osin.Client) error {
 }
 
 // CreateClient stores the client in the database and returns an error, if something went wrong.
-func (s *pgStorage) CreateClient(c osin.Client) error {
+func (s *stor) CreateClient(c osin.Client) error {
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
@@ -142,7 +173,7 @@ func (s *pgStorage) CreateClient(c osin.Client) error {
 }
 
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
-func (s *pgStorage) RemoveClient(id string) (err error) {
+func (s *stor) RemoveClient(id string) (err error) {
 	if _, err = s.db.Exec("DELETE FROM client WHERE id=?", id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -152,7 +183,7 @@ func (s *pgStorage) RemoveClient(id string) (err error) {
 }
 
 // SaveAuthorize saves authorize data.
-func (s *pgStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
+func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
@@ -181,7 +212,7 @@ func (s *pgStorage) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
-func (s *pgStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	var data osin.AuthorizeData
 
 	var auth auth
@@ -215,7 +246,7 @@ func (s *pgStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *pgStorage) RemoveAuthorize(code string) (err error) {
+func (s *stor) RemoveAuthorize(code string) (err error) {
 	if _, err = s.db.Exec("DELETE FROM authorize WHERE code=?", code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -226,7 +257,7 @@ func (s *pgStorage) RemoveAuthorize(code string) (err error) {
 
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
-func (s *pgStorage) SaveAccess(data *osin.AccessData) (err error) {
+func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 	prev := ""
 	authorizeData := &osin.AuthorizeData{}
 
@@ -282,7 +313,7 @@ func (s *pgStorage) SaveAccess(data *osin.AccessData) (err error) {
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *pgStorage) LoadAccess(code string) (*osin.AccessData, error) {
+func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	var result osin.AccessData
 
 	var acc acc
@@ -315,7 +346,7 @@ func (s *pgStorage) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 // RemoveAccess revokes or deletes an AccessData.
-func (s *pgStorage) RemoveAccess(code string) (err error) {
+func (s *stor) RemoveAccess(code string) (err error) {
 	_, err = s.db.Exec("DELETE FROM access WHERE access_token=?", code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
@@ -328,7 +359,7 @@ func (s *pgStorage) RemoveAccess(code string) (err error) {
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *pgStorage) LoadRefresh(code string) (*osin.AccessData, error) {
+func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	var ref ref
 	q := "SELECT access FROM refresh WHERE token=? LIMIT 1"
 	if err := s.db.QueryRow(q, code).Scan(&ref); err == pgx.ErrNoRows {
@@ -341,7 +372,7 @@ func (s *pgStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 }
 
 // RemoveRefresh revokes or deletes refresh AccessData.
-func (s *pgStorage) RemoveRefresh(code string) error {
+func (s *stor) RemoveRefresh(code string) error {
 	_, err := s.db.Exec("DELETE FROM refresh WHERE token=?", code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
@@ -351,7 +382,7 @@ func (s *pgStorage) RemoveRefresh(code string) error {
 	return nil
 }
 
-func (s *pgStorage) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) {
+func (s *stor) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) {
 	_, err = tx.Exec("INSERT INTO refresh (token, access) VALUES (?0, ?1)", refresh, access)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {

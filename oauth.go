@@ -1,35 +1,11 @@
 package auth
 
 import (
+	"github.com/go-ap/auth/internal/log"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	"net/http"
 )
-
-type loggerFn func(logrus.Fields, string, ...interface{})
-
-type logger struct {
-	logFn loggerFn
-	errFn loggerFn
-}
-
-var emptyLogFn = func(logrus.Fields, string, ...interface{}) {}
-
-func (l logger) Printf(format string, v ...interface{}) {
-	l.logFn(nil, format, v...)
-}
-func (l logger) Errorf(format string, v ...interface{}) {
-	l.errFn(nil, format, v...)
-}
-func (l logger) Warningf(format string, v ...interface{}) {
-	l.logFn(nil, format, v...)
-}
-func (l logger) Infof(format string, v ...interface{}) {
-	l.logFn(nil, format, v...)
-}
-func (l logger) Debugf(format string, v ...interface{}) {
-	l.logFn(nil, format, v...)
-}
 
 func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
 	config := osin.ServerConfig{
@@ -47,13 +23,17 @@ func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, er
 	}
 	s := osin.NewServer(&config, store)
 
-	logFn := emptyLogFn
+	logFn := log.EmptyLogFn
+	errFn := log.EmptyLogFn
 	if l != nil {
 		logFn = func(ctx logrus.Fields, format string, v ...interface{}) {
 			l.WithFields(ctx).Infof(format, v...)
 		}
+		errFn = func(ctx logrus.Fields, format string, v ...interface{}) {
+			l.WithFields(ctx).Infof(format, v...)
+		}
 	}
-	s.Logger = logger{logFn: logFn}
-
-	return s, nil
+	var err error
+	s.Logger, err = log.New(log.LogFn(logFn), log.ErrFn(errFn))
+	return s, err
 }

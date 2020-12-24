@@ -1,45 +1,112 @@
-package auth
+package badger
 
 import (
 	"encoding/json"
 	"github.com/dgraph-io/badger/v2"
+	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
+	"os"
 	"path"
+	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 )
 
-type badgerStorage struct {
+const (
+	clientsBucket   = "clients"
+	authorizeBucket = "authorize"
+	accessBucket    = "access"
+	refreshBucket   = "refresh"
+	folder          = "oauth"
+)
+
+type cl struct {
+	Id          string
+	Secret      string
+	RedirectUri string
+	Extra       interface{}
+}
+
+type auth struct {
+	Client      string
+	Code        string
+	ExpiresIn   time.Duration
+	Scope       string
+	RedirectURI string
+	State       string
+	CreatedAt   time.Time
+	Extra       interface{}
+}
+
+type acc struct {
+	Client       string
+	Authorize    string
+	Previous     string
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    time.Duration
+	Scope        string
+	RedirectURI  string
+	CreatedAt    time.Time
+	Extra        interface{}
+}
+
+type ref struct {
+	Access string
+}
+
+func interfaceIsNil(c interface{}) bool {
+	return reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()
+}
+
+type stor struct {
 	d     *badger.DB
 	m     sync.Mutex
 	path  string
 	host  string
-	logFn loggerFn
-	errFn loggerFn
+	logFn log.LoggerFn
+	errFn log.LoggerFn
+	l     badger.Logger
 }
 
-type BadgerConfig struct {
+type Config struct {
 	Path  string
 	Host  string
-	LogFn loggerFn
-	ErrFn loggerFn
+	LogFn log.LoggerFn
+	ErrFn log.LoggerFn
 }
 
-// NewBadgerStore returns a new badger storage instance.
-func NewBadgerStore(c BadgerConfig) *badgerStorage {
+func mkDirIfNotExists(p string) error {
+	const defaultPerm = os.ModeDir | os.ModePerm | 0770
+	p, _ = filepath.Abs(p)
+	if fi, err := os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(p, defaultPerm); err != nil {
+				return err
+			}
+		}
+	} else if !fi.IsDir() {
+		return errors.Errorf("path exists, and is not a folder %s", p)
+	}
+	return nil
+}
+
+// New returns a new badger storage instance.
+func New(c Config) *stor {
 	fullPath := path.Clean(c.Path)
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
-	storPath := path.Join(fullPath, folder)
-	b := badgerStorage{
-		path:  storPath,
+	stPath := path.Join(fullPath, folder)
+	b := stor{
+		path:  stPath,
 		host:  c.Host,
 		m:     sync.Mutex{},
-		logFn: emptyLogFn,
-		errFn: emptyLogFn,
+		logFn: log.EmptyLogFn,
+		errFn: log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		b.errFn = c.ErrFn
@@ -47,17 +114,15 @@ func NewBadgerStore(c BadgerConfig) *badgerStorage {
 	if c.LogFn != nil {
 		b.logFn = c.LogFn
 	}
+	b.l, _ = log.New(log.ErrFn(b.logFn), log.ErrFn(b.errFn))
 	return &b
 }
 
 // Open opens the badger database if possible.
-func (s *badgerStorage) Open() error {
-	var err error
+func (s *stor) Open() error {
 	s.m.Lock()
-	c := badger.DefaultOptions(s.path).WithLogger(logger{
-		logFn: s.logFn,
-		errFn: s.errFn,
-	})
+	var err error
+	c := badger.DefaultOptions(s.path).WithLogger(s.l)
 	s.d, err = badger.Open(c)
 	if err != nil {
 		err = errors.Annotatef(err, "unable to open storage")
@@ -66,7 +131,7 @@ func (s *badgerStorage) Open() error {
 }
 
 // Close closes the badger database if possible.
-func (s *badgerStorage) Close() {
+func (s *stor) Close() {
 	if s.d == nil {
 		return
 	}
@@ -75,7 +140,7 @@ func (s *badgerStorage) Close() {
 }
 
 // Clone
-func (s *badgerStorage) Clone() osin.Storage {
+func (s *stor) Clone() osin.Storage {
 	s.Close()
 	return s
 }
@@ -84,11 +149,11 @@ func itemPath(pieces ...string) []byte {
 	return []byte(path.Join(pieces...))
 }
 
-func (s badgerStorage) clientPath(id string) []byte {
+func (s stor) clientPath(id string) []byte {
 	return itemPath(s.host, clientsBucket, id)
 }
 
-func (s badgerStorage) loadTxnClient(c *osin.DefaultClient, id string) func(tx *badger.Txn) error {
+func (s stor) loadTxnClient(c *osin.DefaultClient, id string) func(tx *badger.Txn) error {
 	fullPath := s.clientPath(id)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
@@ -114,7 +179,7 @@ func loadRawClient(c *osin.DefaultClient) func(raw []byte) error {
 }
 
 // GetClient
-func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
+func (s *stor) GetClient(id string) (osin.Client, error) {
 	if err := s.Open(); err != nil {
 		return nil, err
 	}
@@ -127,7 +192,7 @@ func (s *badgerStorage) GetClient(id string) (osin.Client, error) {
 }
 
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
-func (s *badgerStorage) UpdateClient(c osin.Client) error {
+func (s *stor) UpdateClient(c osin.Client) error {
 	if interfaceIsNil(c) {
 		return nil
 	}
@@ -152,12 +217,12 @@ func (s *badgerStorage) UpdateClient(c osin.Client) error {
 }
 
 // CreateClient stores the client in the database and returns an error, if something went wrong.
-func (s *badgerStorage) CreateClient(c osin.Client) error {
+func (s *stor) CreateClient(c osin.Client) error {
 	return s.UpdateClient(c)
 }
 
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
-func (s *badgerStorage) RemoveClient(id string) error {
+func (s *stor) RemoveClient(id string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open badger store")
@@ -168,12 +233,12 @@ func (s *badgerStorage) RemoveClient(id string) error {
 	})
 }
 
-func (s badgerStorage) authorizePath(code string) []byte {
+func (s stor) authorizePath(code string) []byte {
 	return itemPath(s.host, authorizeBucket, code)
 }
 
 // SaveAuthorize
-func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
+func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -202,7 +267,7 @@ func (s *badgerStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	})
 }
 
-func (s badgerStorage) loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
+func (s stor) loadTxnAuthorize(a *osin.AuthorizeData, code string) func(tx *badger.Txn) error {
 	fullPath := s.authorizePath(code)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
@@ -237,7 +302,7 @@ func loadRawAuthorize(a *osin.AuthorizeData) func(raw []byte) error {
 }
 
 // LoadAuthorize
-func (s *badgerStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	data := osin.AuthorizeData{}
 	err := s.Open()
 	if err != nil {
@@ -259,7 +324,7 @@ func (s *badgerStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) 
 }
 
 // RemoveAuthorize
-func (s *badgerStorage) RemoveAuthorize(code string) error {
+func (s *stor) RemoveAuthorize(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open badger store")
@@ -270,12 +335,12 @@ func (s *badgerStorage) RemoveAuthorize(code string) error {
 	})
 }
 
-func (s badgerStorage) accessPath(code string) []byte {
+func (s stor) accessPath(code string) []byte {
 	return itemPath(s.host, accessBucket, code)
 }
 
 // SaveAccess
-func (s *badgerStorage) SaveAccess(data *osin.AccessData) error {
+func (s *stor) SaveAccess(data *osin.AccessData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open badger store")
@@ -355,7 +420,7 @@ func loadRawAccess(a *osin.AccessData) func(raw []byte) error {
 	}
 }
 
-func (s badgerStorage) loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Txn) error {
+func (s stor) loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Txn) error {
 	fullPath := s.accessPath(token)
 	return func(tx *badger.Txn) error {
 		it, err := tx.Get(fullPath)
@@ -367,7 +432,7 @@ func (s badgerStorage) loadTxnAccess(a *osin.AccessData, token string) func(tx *
 }
 
 // LoadAccess
-func (s *badgerStorage) LoadAccess(code string) (*osin.AccessData, error) {
+func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unable to open badger store")
@@ -400,7 +465,7 @@ func (s *badgerStorage) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 // RemoveAccess
-func (s *badgerStorage) RemoveAccess(token string) error {
+func (s *stor) RemoveAccess(token string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open badger store")
@@ -411,17 +476,17 @@ func (s *badgerStorage) RemoveAccess(token string) error {
 	})
 }
 
-func (s badgerStorage) refreshPath(refresh string) []byte {
+func (s stor) refreshPath(refresh string) []byte {
 	return itemPath(s.host, refreshBucket, refresh)
 }
 
 // LoadRefresh
-func (s *badgerStorage) LoadRefresh(token string) (*osin.AccessData, error) {
+func (s *stor) LoadRefresh(token string) (*osin.AccessData, error) {
 	return nil, nil
 }
 
 // RemoveRefresh revokes or deletes refresh AccessData.
-func (s *badgerStorage) RemoveRefresh(token string) error {
+func (s *stor) RemoveRefresh(token string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open badger store")
@@ -432,7 +497,7 @@ func (s *badgerStorage) RemoveRefresh(token string) error {
 	})
 }
 
-func (s badgerStorage) saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
+func (s stor) saveRefresh(txn *badger.Txn, refresh, access string) (err error) {
 	ref := ref{
 		Access: access,
 	}

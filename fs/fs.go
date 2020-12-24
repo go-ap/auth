@@ -1,29 +1,77 @@
-package auth
+package fs
 
 import (
 	"encoding/json"
+	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"time"
 )
 
-type fsStorage struct {
+const (
+	defaultPerm     = os.ModeDir | os.ModePerm | 0770
+	clientsBucket   = "clients"
+	authorizeBucket = "authorize"
+	accessBucket    = "access"
+	refreshBucket   = "refresh"
+	folder          = "oauth"
+)
+
+type cl struct {
+	Id          string
+	Secret      string
+	RedirectUri string
+	Extra       interface{}
+}
+
+type auth struct {
+	Client      string
+	Code        string
+	ExpiresIn   time.Duration
+	Scope       string
+	RedirectURI string
+	State       string
+	CreatedAt   time.Time
+	Extra       interface{}
+}
+
+type acc struct {
+	Client       string
+	Authorize    string
+	Previous     string
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    time.Duration
+	Scope        string
+	RedirectURI  string
+	CreatedAt    time.Time
+	Extra        interface{}
+}
+
+type ref struct {
+	Access string
+}
+
+func interfaceIsNil(c interface{}) bool {
+	return reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()
+}
+
+type stor struct {
 	path  string
-	logFn loggerFn
-	errFn loggerFn
+	logFn log.LoggerFn
+	errFn log.LoggerFn
 }
 
-type FSConfig struct {
+type Config struct {
 	Path  string
-	LogFn loggerFn
-	ErrFn loggerFn
+	LogFn log.LoggerFn
+	ErrFn log.LoggerFn
 }
-
-const defaultPerm = os.ModeDir | os.ModePerm | 0770
 
 func mkDirIfNotExists(p string) error {
 	p, _ = filepath.Abs(p)
@@ -72,7 +120,7 @@ func loadRawFromPath(itPath string) ([]byte, error) {
 	return raw, nil
 }
 
-func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (uint, error) {
+func (s *stor) loadFromPath(itPath string, loaderFn func([]byte) error) (uint, error) {
 	var err error
 	var cnt uint = 0
 	if isStorageCollectionKey(itPath) {
@@ -104,18 +152,16 @@ func (s *fsStorage) loadFromPath(itPath string, loaderFn func([]byte) error) (ui
 	return cnt, err
 }
 
-const folder = "oauth"
-
-// NewFSStore returns a new filesystem storage instance.
-func NewFSStore(c FSConfig) *fsStorage {
+// New returns a new filesystem storage instance.
+func New(c Config) *stor {
 	fullPath := path.Join(path.Clean(c.Path), folder)
 	if err := mkDirIfNotExists(fullPath); err != nil {
 		return nil
 	}
-	s := fsStorage{
+	s := stor{
 		path:  fullPath,
-		logFn:   emptyLogFn,
-		errFn:   emptyLogFn,
+		logFn:   log.EmptyLogFn,
+		errFn:   log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -127,20 +173,20 @@ func NewFSStore(c FSConfig) *fsStorage {
 }
 
 // Clone
-func (s *fsStorage) Clone() osin.Storage {
+func (s *stor) Clone() osin.Storage {
 	return s
 }
 
 // Close
-func (s *fsStorage) Close() {}
+func (s *stor) Close() {}
 
 // Open
-func (s *fsStorage) Open() error {
+func (s *stor) Open() error {
 	return nil
 }
 
 // ListClients
-func (s *fsStorage) ListClients() ([]osin.Client, error) {
+func (s *stor) ListClients() ([]osin.Client, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -167,7 +213,7 @@ func (s *fsStorage) ListClients() ([]osin.Client, error) {
 	return clients, err
 }
 
-func (s *fsStorage) loadClientFromPath(clientPath string) (osin.Client, error) {
+func (s *stor) loadClientFromPath(clientPath string) (osin.Client, error) {
 	c := new(osin.DefaultClient)
 	_, err := s.loadFromPath(clientPath, func(raw []byte) error {
 		cl := cl{}
@@ -184,7 +230,7 @@ func (s *fsStorage) loadClientFromPath(clientPath string) (osin.Client, error) {
 }
 
 // GetClient
-func (s *fsStorage) GetClient(id string) (osin.Client, error) {
+func (s *stor) GetClient(id string) (osin.Client, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -231,7 +277,7 @@ func putRaw(basePath string, raw []byte) error {
 }
 
 // UpdateClient
-func (s *fsStorage) UpdateClient(c osin.Client) error {
+func (s *stor) UpdateClient(c osin.Client) error {
 	if interfaceIsNil(c) {
 		return nil
 	}
@@ -258,12 +304,12 @@ func (s *fsStorage) UpdateClient(c osin.Client) error {
 }
 
 // CreateClient
-func (s *fsStorage) CreateClient(c osin.Client) error {
+func (s *stor) CreateClient(c osin.Client) error {
 	return s.UpdateClient(c)
 }
 
 // RemoveClient
-func (s *fsStorage) RemoveClient(id string) error {
+func (s *stor) RemoveClient(id string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open fs storage")
@@ -273,7 +319,7 @@ func (s *fsStorage) RemoveClient(id string) error {
 }
 
 // SaveAuthorize saves authorize data.
-func (s *fsStorage) SaveAuthorize(data *osin.AuthorizeData) error {
+func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -301,7 +347,7 @@ func (s *fsStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 	return putItem(authorizePath, auth)
 }
 
-func (s *fsStorage) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData, error) {
+func (s *stor) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData, error) {
 	data := new(osin.AuthorizeData)
 	_, err := s.loadFromPath(authPath, func(raw []byte) error {
 		auth := auth{}
@@ -337,7 +383,7 @@ func (s *fsStorage) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData,
 }
 
 // LoadAuthorize looks up AuthorizeData by a code.
-func (s *fsStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -347,7 +393,7 @@ func (s *fsStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *fsStorage) RemoveAuthorize(code string) error {
+func (s *stor) RemoveAuthorize(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open fs storage")
@@ -357,7 +403,7 @@ func (s *fsStorage) RemoveAuthorize(code string) error {
 }
 
 // SaveAccess writes AccessData.
-func (s *fsStorage) SaveAccess(data *osin.AccessData) error {
+func (s *stor) SaveAccess(data *osin.AccessData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -415,7 +461,7 @@ func (s *fsStorage) SaveAccess(data *osin.AccessData) error {
 	return putItem(authorizePath, acc)
 }
 
-func (s *fsStorage) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
+func (s *stor) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
 	result := new(osin.AccessData)
 	_, err := s.loadFromPath(accessPath, func(raw []byte) error {
 		access := acc{}
@@ -473,7 +519,7 @@ func (s *fsStorage) loadAccessFromPath(accessPath string) (*osin.AccessData, err
 }
 
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
-func (s *fsStorage) LoadAccess(code string) (*osin.AccessData, error) {
+func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -484,7 +530,7 @@ func (s *fsStorage) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 // RemoveAccess revokes or deletes an AccessData.
-func (s *fsStorage) RemoveAccess(code string) error {
+func (s *stor) RemoveAccess(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open fs storage")
@@ -494,12 +540,12 @@ func (s *fsStorage) RemoveAccess(code string) error {
 }
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
-func (s *fsStorage) LoadRefresh(code string) (*osin.AccessData, error) {
+func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	return nil, nil
 }
 
 // RemoveRefresh revokes or deletes refresh AccessData.
-func (s *fsStorage) RemoveRefresh(code string) error {
+func (s *stor) RemoveRefresh(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open fs storage")

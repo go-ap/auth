@@ -1,32 +1,74 @@
-package auth
+package boltdb
 
 import (
 	"bytes"
 	"encoding/json"
 	"github.com/boltdb/bolt"
+	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	"time"
 )
 
-// boltStorage implements interface "github.com/RangelReale/osin".boltStorage and interface "github.com/ory/osin-storage".boltStorage
-type boltStorage struct {
+const (
+	clientsBucket   = "clients"
+	authorizeBucket = "authorize"
+	accessBucket    = "access"
+	refreshBucket   = "refresh"
+)
+
+type cl struct {
+	Id          string
+	Secret      string
+	RedirectUri string
+	Extra       interface{}
+}
+
+type auth struct {
+	Client      string
+	Code        string
+	ExpiresIn   time.Duration
+	Scope       string
+	RedirectURI string
+	State       string
+	CreatedAt   time.Time
+	Extra       interface{}
+}
+
+type acc struct {
+	Client       string
+	Authorize    string
+	Previous     string
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    time.Duration
+	Scope        string
+	RedirectURI  string
+	CreatedAt    time.Time
+	Extra        interface{}
+}
+
+type ref struct {
+	Access string
+}
+
+type stor struct {
 	d     *bolt.DB
 	path  string
 	root  []byte
-	logFn loggerFn
-	errFn loggerFn
+	logFn log.LoggerFn
+	errFn log.LoggerFn
 }
 
-type BoltConfig struct {
+type Config struct {
 	Path       string
 	BucketName string
-	LogFn      loggerFn
-	ErrFn      loggerFn
+	LogFn      log.LoggerFn
+	ErrFn      log.LoggerFn
 }
 
-func BootstrapBoltDB(path string, rootBucket []byte) error {
+func Bootstrap(path string, rootBucket []byte) error {
 	var err error
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
@@ -59,13 +101,13 @@ func BootstrapBoltDB(path string, rootBucket []byte) error {
 	})
 }
 
-// NewBoltDBStore returns a new boltdb storage instance.
-func NewBoltDBStore(c BoltConfig) *boltStorage {
-	s := boltStorage{
+// New returns a new boltdb storage instance.
+func New(c Config) *stor {
+	s := stor{
 		path:  c.Path,
 		root:  []byte(c.BucketName),
-		logFn:   emptyLogFn,
-		errFn:   emptyLogFn,
+		logFn:   log.EmptyLogFn,
+		errFn:   log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -80,20 +122,20 @@ func NewBoltDBStore(c BoltConfig) *boltStorage {
 // to avoid concurrent access problems.
 // This is to avoid cloning the connection at each method access.
 // Can return itself if not a problem.
-func (s *boltStorage) Clone() osin.Storage {
+func (s *stor) Clone() osin.Storage {
 	s.Close()
 	return s
 }
 
-// Close the resources the boltStorage potentially holds (using Clone for example)
-func (s *boltStorage) Close() {
+// Close the resources the stor potentially holds (using Clone for example)
+func (s *stor) Close() {
 	if s.d == nil {
 		return
 	}
 	s.d.Close()
 }
 
-func (s *boltStorage) Open() error {
+func (s *stor) Open() error {
 	var err error
 	s.d, err = bolt.Open(s.path, 0600, nil)
 	if err != nil {
@@ -102,7 +144,7 @@ func (s *boltStorage) Open() error {
 	return nil
 }
 
-func (s *boltStorage) ListClients() ([]osin.Client, error) {
+func (s *stor) ListClients() ([]osin.Client, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -139,7 +181,7 @@ func (s *boltStorage) ListClients() ([]osin.Client, error) {
 }
 
 // GetClient loads the client by id
-func (s *boltStorage) GetClient(id string) (osin.Client, error) {
+func (s *stor) GetClient(id string) (osin.Client, error) {
 	c := osin.DefaultClient{}
 	err := s.Open()
 	if err != nil {
@@ -171,7 +213,7 @@ func (s *boltStorage) GetClient(id string) (osin.Client, error) {
 }
 
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
-func (s *boltStorage) UpdateClient(c osin.Client) error {
+func (s *stor) UpdateClient(c osin.Client) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -201,12 +243,12 @@ func (s *boltStorage) UpdateClient(c osin.Client) error {
 }
 
 // CreateClient stores the client in the database and returns an error, if something went wrong.
-func (s *boltStorage) CreateClient(c osin.Client) error {
+func (s *stor) CreateClient(c osin.Client) error {
 	return s.UpdateClient(c)
 }
 
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
-func (s *boltStorage) RemoveClient(id string) error {
+func (s *stor) RemoveClient(id string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -226,7 +268,7 @@ func (s *boltStorage) RemoveClient(id string) error {
 }
 
 // SaveAuthorize saves authorize data.
-func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
+func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -267,7 +309,7 @@ func (s *boltStorage) SaveAuthorize(data *osin.AuthorizeData) error {
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
-func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	var data osin.AuthorizeData
 	err := s.Open()
 	if err != nil {
@@ -334,7 +376,7 @@ func (s *boltStorage) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 }
 
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *boltStorage) RemoveAuthorize(code string) error {
+func (s *stor) RemoveAuthorize(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -356,7 +398,7 @@ func (s *boltStorage) RemoveAuthorize(code string) error {
 
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
-func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
+func (s *stor) SaveAccess(data *osin.AccessData) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -421,7 +463,7 @@ func (s *boltStorage) SaveAccess(data *osin.AccessData) error {
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
+func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	var result osin.AccessData
 	err := s.Open()
 	if err != nil {
@@ -544,7 +586,7 @@ func (s *boltStorage) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 // RemoveAccess revokes or deletes an AccessData.
-func (s *boltStorage) RemoveAccess(code string) (err error) {
+func (s *stor) RemoveAccess(code string) (err error) {
 	return s.d.Update(func(tx *bolt.Tx) error {
 		rb := tx.Bucket(s.root)
 		if rb == nil {
@@ -561,7 +603,7 @@ func (s *boltStorage) RemoveAccess(code string) (err error) {
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
-func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
+func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	err := s.Open()
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unable to open boldtb")
@@ -593,7 +635,7 @@ func (s *boltStorage) LoadRefresh(code string) (*osin.AccessData, error) {
 }
 
 // RemoveRefresh revokes or deletes refresh AccessData.
-func (s *boltStorage) RemoveRefresh(code string) error {
+func (s *stor) RemoveRefresh(code string) error {
 	err := s.Open()
 	if err != nil {
 		return errors.Annotatef(err, "Unable to open boldtb")
@@ -612,7 +654,7 @@ func (s *boltStorage) RemoveRefresh(code string) error {
 	})
 }
 
-func (s *boltStorage) saveRefresh(refresh, access string) error {
+func (s *stor) saveRefresh(refresh, access string) error {
 	ref := ref{
 		Access: access,
 	}

@@ -1,4 +1,4 @@
-package auth
+package fs
 
 import (
 	"encoding/json"
@@ -60,14 +60,14 @@ func saveFsClient(client cl, basePath string) error {
 
 const perm = os.ModeDir|os.ModePerm|0700
 
-func initializeFsStorage() *fsStorage {
+func initializeStor() *stor {
 	os.RemoveAll(tempFolder)
 
 	os.MkdirAll(path.Join(tempFolder, clientsBucket), perm)
 	os.MkdirAll(path.Join(tempFolder, accessBucket), perm)
 	os.MkdirAll(path.Join(tempFolder, authorizeBucket), perm)
 	os.MkdirAll(path.Join(tempFolder, refreshBucket), perm)
-	s := fsStorage {
+	s := stor{
 		path: tempFolder,
 	}
 	return &s
@@ -77,16 +77,16 @@ func cleanup() {
 	os.RemoveAll(tempFolder)
 }
 
-func TestFsStorage_Close(t *testing.T) {
-	s := fsStorage{}
+func TestStor_Close(t *testing.T) {
+	s := stor{}
 	s.Close()
 }
 
-func TestFsStorage_Open(t *testing.T) {
-	s := fsStorage{}
+func TestStor_Open(t *testing.T) {
+	s := stor{}
 	err := s.Open()
 	if err != nil {
-		t.Error("Expected nil when opening fsStorage")
+		t.Errorf("Expected nil when opening %T", s)
 	}
 }
 
@@ -115,9 +115,9 @@ var loadClientTests = map[string]struct {
 		},
 	}
 
-func TestFsStorage_ListClients(t *testing.T) {
+func TestStor_ListClients(t *testing.T) {
 	defer cleanup()
-	s := initializeFsStorage()
+	s := initializeStor()
 
 	for name, tt := range loadClientTests {
 		if err := saveFsClients(s.path, tt.clients...); err != nil {
@@ -142,10 +142,10 @@ func TestFsStorage_ListClients(t *testing.T) {
 	}
 }
 
-func TestFsStorage_Clone(t *testing.T) {
-	s := new(fsStorage)
+func TestStor_Clone(t *testing.T) {
+	s := new(stor)
 	ss := s.Clone()
-	s1, ok := ss.(*fsStorage)
+	s1, ok := ss.(*stor)
 	if !ok {
 		t.Errorf("Error when cloning storage, unable to convert interface back to %T: %T", s, ss)
 	}
@@ -154,9 +154,9 @@ func TestFsStorage_Clone(t *testing.T) {
 	}
 }
 
-func TestFsStorage_GetClient(t *testing.T) {
+func TestStor_GetClient(t *testing.T) {
 	defer cleanup()
-	s := initializeFsStorage()
+	s := initializeStor()
 
 	for name, tt := range loadClientTests {
 		if err := saveFsClients(s.path, tt.clients...); err != nil {
@@ -201,9 +201,9 @@ var createClientTests = map[string]struct{
 	},
 }
 
-func TestFsStorage_CreateClient(t *testing.T) {
+func TestStor_CreateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeFsStorage()
+	s := initializeStor()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {
@@ -239,9 +239,9 @@ func TestFsStorage_CreateClient(t *testing.T) {
 	}
 }
 
-func TestFsStorage_UpdateClient(t *testing.T) {
+func TestStor_UpdateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeFsStorage()
+	s := initializeStor()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {
@@ -277,39 +277,39 @@ func TestFsStorage_UpdateClient(t *testing.T) {
 	}
 }
 
-func TestFsStorage_LoadAuthorize(t *testing.T) {
+func TestStor_LoadAuthorize(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_LoadAccess(t *testing.T) {
+func TestStor_LoadAccess(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_LoadRefresh(t *testing.T) {
+func TestStor_LoadRefresh(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_RemoveAccess(t *testing.T) {
+func TestStor_RemoveAccess(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_RemoveAuthorize(t *testing.T) {
+func TestStor_RemoveAuthorize(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_RemoveClient(t *testing.T) {
+func TestStor_RemoveClient(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_RemoveRefresh(t *testing.T) {
+func TestStor_RemoveRefresh(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_SaveAccess(t *testing.T) {
+func TestStor_SaveAccess(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestFsStorage_SaveAuthorize(t *testing.T) {
+func TestStor_SaveAuthorize(t *testing.T) {
 	t.Skipf("TODO")
 }
 

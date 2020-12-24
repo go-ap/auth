@@ -1,6 +1,7 @@
-package auth
+package sqlite
 
 import (
+	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 )
@@ -12,14 +13,14 @@ func NewSqliteStore(c SqliteConfig) *sqliteStorage {
 
 type sqliteStorage struct {
 	path  string
-	logFn loggerFn
-	errFn loggerFn
+	logFn log.LoggerFn
+	errFn log.LoggerFn
 }
 
 type SqliteConfig struct {
 	Path  string
-	LogFn loggerFn
-	ErrFn loggerFn
+	LogFn log.LoggerFn
+	ErrFn log.LoggerFn
 }
 
 var errNotImplemented = errors.NotImplementedf("not implemented")

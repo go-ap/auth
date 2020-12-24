@@ -1,22 +1,33 @@
-package auth
+package badger
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/badger/v2"
+	"github.com/openshift/osin"
+	"math/rand"
 	"os"
 	"path"
 	"reflect"
 	"testing"
 )
 
-func initializeBadgerStorage() *badgerStorage {
+var (
+	seedFolder = fmt.Sprintf("test-%d", rand.Int())
+	tempFolder = path.Join(os.TempDir(), seedFolder)
+)
+
+func cleanup() {
 	os.RemoveAll(tempFolder)
-	return NewBadgerStore(BadgerConfig{Path:  tempFolder})
 }
 
-func saveBadgerClients(s *badgerStorage, clients ...cl) error {
+func initializeStor() *stor {
+	os.RemoveAll(tempFolder)
+	return New(Config{Path: tempFolder})
+}
+
+func saveBadgerClients(s *stor, clients ...cl) error {
 	for _, c := range clients {
 		if err := saveBadgerClient(s, c); err != nil {
 			return err
@@ -25,7 +36,7 @@ func saveBadgerClients(s *badgerStorage, clients ...cl) error {
 	return nil
 }
 
-func saveBadgerItem(s *badgerStorage, it interface{}, basePath string) error {
+func saveBadgerItem(s *stor, it interface{}, basePath string) error {
 	raw, err := json.Marshal(it)
 	if err != nil {
 		return err
@@ -42,7 +53,7 @@ func saveBadgerItem(s *badgerStorage, it interface{}, basePath string) error {
 	})
 }
 
-func saveBadgerClient(s *badgerStorage, client cl) error {
+func saveBadgerClient(s *stor, client cl) error {
 	if len(client.Id) == 0 {
 		return nil
 	}
@@ -50,9 +61,34 @@ func saveBadgerClient(s *badgerStorage, client cl) error {
 	return saveBadgerItem(s, client, testClientPath)
 }
 
-func TestBadgerStorage_GetClient(t *testing.T) {
+var loadClientTests = map[string]struct {
+	clients []cl
+	want    []osin.Client
+	err     error
+}{
+	"nil": {
+		clients: []cl{},
+		want:    []osin.Client{},
+		err:     nil,
+	},
+	"test-client-id": {
+		clients: []cl{
+			{
+				Id: "test-client-id",
+			},
+		},
+		want: []osin.Client{
+			&osin.DefaultClient{
+				Id:          "test-client-id",
+			},
+		},
+		err: nil,
+	},
+}
+
+func TestStor_GetClient(t *testing.T) {
 	defer cleanup()
-	s := initializeBadgerStorage()
+	s := initializeStor()
 
 	for name, tt := range loadClientTests {
 		if err := saveBadgerClients(s, tt.clients...); err != nil {
