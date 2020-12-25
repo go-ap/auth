@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-ap/auth/internal/log"
 	"github.com/openshift/osin"
 	"math/rand"
 	"os"
@@ -27,7 +28,7 @@ func saveFsClients(base string, clients ...cl) error {
 }
 
 func saveFsItem(it interface{}, basePath string) error {
-	if err := os.MkdirAll(basePath, perm); err != nil {
+	if err := os.MkdirAll(basePath, defaultPerm); err != nil {
 		return err
 	}
 
@@ -58,18 +59,14 @@ func saveFsClient(client cl, basePath string) error {
 	return saveFsItem(client, testClientPath)
 }
 
-const perm = os.ModeDir|os.ModePerm|0700
-
-func initializeStor() *stor {
+func initialize() *stor {
 	os.RemoveAll(tempFolder)
 
-	os.MkdirAll(path.Join(tempFolder, clientsBucket), perm)
-	os.MkdirAll(path.Join(tempFolder, accessBucket), perm)
-	os.MkdirAll(path.Join(tempFolder, authorizeBucket), perm)
-	os.MkdirAll(path.Join(tempFolder, refreshBucket), perm)
-	s := stor{
-		path: tempFolder,
-	}
+	os.MkdirAll(path.Join(tempFolder, clientsBucket), defaultPerm)
+	os.MkdirAll(path.Join(tempFolder, accessBucket), defaultPerm)
+	os.MkdirAll(path.Join(tempFolder, authorizeBucket), defaultPerm)
+	os.MkdirAll(path.Join(tempFolder, refreshBucket), defaultPerm)
+	s := stor{ path:  tempFolder, logFn: log.EmptyLogFn, errFn: log.EmptyLogFn }
 	return &s
 }
 
@@ -116,12 +113,12 @@ var loadClientTests = map[string]struct {
 	}
 
 func TestStor_ListClients(t *testing.T) {
-	defer cleanup()
-	s := initializeStor()
 
 	for name, tt := range loadClientTests {
+		s := initialize()
 		if err := saveFsClients(s.path, tt.clients...); err != nil {
 			t.Logf("Unable to save clients: %s", err)
+			cleanup()
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
@@ -139,6 +136,7 @@ func TestStor_ListClients(t *testing.T) {
 				t.Errorf("Error when loading clients, expected %#v, received %#v", tt.want, clients)
 			}
 		})
+		cleanup()
 	}
 }
 
@@ -156,7 +154,7 @@ func TestStor_Clone(t *testing.T) {
 
 func TestStor_GetClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStor()
+	s := initialize()
 
 	for name, tt := range loadClientTests {
 		if err := saveFsClients(s.path, tt.clients...); err != nil {
@@ -203,7 +201,7 @@ var createClientTests = map[string]struct{
 
 func TestStor_CreateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStor()
+	s := initialize()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {
@@ -241,7 +239,7 @@ func TestStor_CreateClient(t *testing.T) {
 
 func TestStor_UpdateClient(t *testing.T) {
 	defer cleanup()
-	s := initializeStor()
+	s := initialize()
 
 	for name, tt := range createClientTests {
 		t.Run(name, func(t *testing.T) {
