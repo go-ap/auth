@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"time"
 )
+
 type cl struct {
 	Id          string
 	Secret      string
@@ -56,9 +57,9 @@ type Config struct {
 	ErrFn   log.LoggerFn
 }
 
-// Storage implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
+// stor implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
 type stor struct {
-	db    *pgx.Conn
+	conn  *pgx.Conn
 	conf  Config
 	logFn log.LoggerFn
 	errFn log.LoggerFn
@@ -67,9 +68,9 @@ type stor struct {
 // New returns a new postgres storage instance.
 func New(c Config) *stor {
 	s := stor{
-		conf: c,
-		logFn:   log.EmptyLogFn,
-		errFn:   log.EmptyLogFn,
+		conf:  c,
+		logFn: log.EmptyLogFn,
+		errFn: log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -80,7 +81,7 @@ func New(c Config) *stor {
 	return &s
 }
 
-func Bootstrap(db *pgx.Conn, cl osin.Client) error {
+func Bootstrap(conn *pgx.Conn, cl osin.Client) error {
 	return nil
 }
 
@@ -94,31 +95,32 @@ func (s *stor) Clone() osin.Storage {
 
 // Close the resources the Storage potentially holds (using Clone for example)
 func (s *stor) Close() {
-	if s.db == nil {
+	if s.conn == nil {
 		return
 	}
-	s.db.Close()
+	s.conn.Close()
 }
 
 type logger struct {
 	logFn log.LoggerFn
 }
+
 func (p logger) Log(level pgx.LogLevel, msg string, data map[string]interface{}) {
 	p.logFn(data, "%s: %s", level, msg)
 }
 
 func (s *stor) Open() error {
 	var err error
-	s.db, err = pgx.Connect(pgx.ConnConfig{
+	conf := pgx.ConnConfig{
 		Host:     s.conf.Host,
 		Port:     uint16(s.conf.Port),
 		Database: s.conf.Name,
 		User:     s.conf.User,
 		Password: s.conf.Pw,
 		Logger:   logger{s.logFn},
-	})
-	if err != nil {
-		return errors.Annotatef(err, "could not open db")
+	}
+	if s.conn, err = pgx.Connect(conf); err != nil {
+		return errors.Annotatef(err, "could not open pgx connection")
 	}
 	return nil
 }
@@ -128,7 +130,7 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 	q := "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
 	var cl cl
 	var c osin.DefaultClient
-	if err := s.db.QueryRow(q, id).Scan(&cl); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(q, id).Scan(&cl); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "select"}, "%s", err)
@@ -150,7 +152,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 		return err
 	}
 
-	if _, err := s.db.Exec("UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
+	if _, err := s.conn.Exec("UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -165,7 +167,7 @@ func (s *stor) CreateClient(c osin.Client) error {
 		return err
 	}
 
-	if _, err := s.db.Exec("INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
+	if _, err := s.conn.Exec("INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -174,7 +176,7 @@ func (s *stor) CreateClient(c osin.Client) error {
 
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
 func (s *stor) RemoveClient(id string) (err error) {
-	if _, err = s.db.Exec("DELETE FROM client WHERE id=?", id); err != nil {
+	if _, err = s.conn.Exec("DELETE FROM client WHERE id=?", id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -201,7 +203,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 		extra,
 	}
 
-	if _, err = s.db.Exec("INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) "+
+	if _, err = s.conn.Exec("INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) "+
 		"VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7)", params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "")
@@ -217,7 +219,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 	var auth auth
 	q := "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
-	if err := s.db.QueryRow(q, code).Scan(&auth); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(q, code).Scan(&auth); err == pgx.ErrNoRows {
 		return nil, errors.NotFoundf("")
 	} else if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
@@ -247,11 +249,11 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *stor) RemoveAuthorize(code string) (err error) {
-	if _, err = s.db.Exec("DELETE FROM authorize WHERE code=?", code); err != nil {
+	if _, err = s.conn.Exec("DELETE FROM authorize WHERE code=?", code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
-	s.logFn(logrus.Fields{"code": code,}, "removed authorization token")
+	s.logFn(logrus.Fields{"code": code}, "removed authorization token")
 	return nil
 }
 
@@ -275,7 +277,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 		return err
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.conn.Begin()
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "")
@@ -320,7 +322,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	q := "SELECT " +
 		"client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra " +
 		"FROM access WHERE access_token=? LIMIT 1"
-	if err := s.db.QueryRow(q, code).Scan(&acc); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(q, code).Scan(&acc); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		return nil, errors.Annotatef(err, "")
@@ -334,7 +336,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	result.UserData = acc.Extra
 	client, err := s.GetClient(acc.Client)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "select",}, err.Error())
+		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "select"}, err.Error())
 		return nil, err
 	}
 
@@ -347,7 +349,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 
 // RemoveAccess revokes or deletes an AccessData.
 func (s *stor) RemoveAccess(code string) (err error) {
-	_, err = s.db.Exec("DELETE FROM access WHERE access_token=?", code)
+	_, err = s.conn.Exec("DELETE FROM access WHERE access_token=?", code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -362,7 +364,7 @@ func (s *stor) RemoveAccess(code string) (err error) {
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	var ref ref
 	q := "SELECT access FROM refresh WHERE token=? LIMIT 1"
-	if err := s.db.QueryRow(q, code).Scan(&ref); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(q, code).Scan(&ref); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 
@@ -373,7 +375,7 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *stor) RemoveRefresh(code string) error {
-	_, err := s.db.Exec("DELETE FROM refresh WHERE token=?", code)
+	_, err := s.conn.Exec("DELETE FROM refresh WHERE token=?", code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
