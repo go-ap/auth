@@ -23,6 +23,6 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spacemonkeygo/httpsig v0.0.0-20181218213338-2605ae379e47
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899 // indirect
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/text v0.3.3 // indirect
+	modernc.org/sqlite v1.7.5
 )
