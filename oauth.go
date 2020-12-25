@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func NewOAuth2Server(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
+func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
 	config := osin.ServerConfig{
 		AuthorizationExpiration:   86400,
 		AccessExpiration:          2678400,
