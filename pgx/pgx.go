@@ -57,6 +57,8 @@ type Config struct {
 	ErrFn   log.LoggerFn
 }
 
+var errNotImplemented = errors.NotImplementedf("not implemented")
+
 // stor implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
 type stor struct {
 	conn  *pgx.Conn
@@ -125,12 +127,18 @@ func (s *stor) Open() error {
 	return nil
 }
 
+const getClients = "SELECT id, secret, redirect_uri, extra FROM client;"
+// ListClients
+func (s *stor) ListClients() ([]osin.Client, error) {
+	return nil, errNotImplemented
+}
+
+const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
-	q := "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
 	var cl cl
 	var c osin.DefaultClient
-	if err := s.conn.QueryRow(q, id).Scan(&cl); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(getClient, id).Scan(&cl); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "select"}, "%s", err)
@@ -144,6 +152,7 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 	return &c, nil
 }
 
+const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1"
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
 func (s *stor) UpdateClient(c osin.Client) error {
 	data, err := assertToBytes(c.GetUserData())
@@ -152,13 +161,14 @@ func (s *stor) UpdateClient(c osin.Client) error {
 		return err
 	}
 
-	if _, err := s.conn.Exec("UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
+	if _, err := s.conn.Exec(updateClient, c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
 }
 
+const createClient = "INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)"
 // CreateClient stores the client in the database and returns an error, if something went wrong.
 func (s *stor) CreateClient(c osin.Client) error {
 	data, err := assertToBytes(c.GetUserData())
@@ -167,16 +177,17 @@ func (s *stor) CreateClient(c osin.Client) error {
 		return err
 	}
 
-	if _, err := s.conn.Exec("INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)", c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
+	if _, err := s.conn.Exec(createClient, c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
 }
 
+const removeClient = "DELETE FROM client WHERE id=?"
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
 func (s *stor) RemoveClient(id string) (err error) {
-	if _, err = s.conn.Exec("DELETE FROM client WHERE id=?", id); err != nil {
+	if _, err = s.conn.Exec(removeClient, id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -184,6 +195,8 @@ func (s *stor) RemoveClient(id string) (err error) {
 	return nil
 }
 
+const saveAuthorize = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) 
+	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7)`
 // SaveAuthorize saves authorize data.
 func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	extra, err := assertToBytes(data.UserData)
@@ -203,14 +216,14 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 		extra,
 	}
 
-	if _, err = s.conn.Exec("INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) "+
-		"VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7)", params...); err != nil {
+	if _, err = s.conn.Exec(saveAuthorize, params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
 }
 
+const loadAuthorize = "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
@@ -218,8 +231,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	var data osin.AuthorizeData
 
 	var auth auth
-	q := "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
-	if err := s.conn.QueryRow(q, code).Scan(&auth); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(loadAuthorize, code).Scan(&auth); err == pgx.ErrNoRows {
 		return nil, errors.NotFoundf("")
 	} else if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
@@ -247,9 +259,10 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	return &data, nil
 }
 
+const removeAuthorize = "DELETE FROM authorize WHERE code=?"
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *stor) RemoveAuthorize(code string) (err error) {
-	if _, err = s.conn.Exec("DELETE FROM authorize WHERE code=?", code); err != nil {
+	if _, err = s.conn.Exec(removeAuthorize, code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -257,6 +270,8 @@ func (s *stor) RemoveAuthorize(code string) (err error) {
 	return nil
 }
 
+const saveAccess = `INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
+	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
 func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
@@ -293,8 +308,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 	if data.Client == nil {
 		return errors.Newf("data.Client must not be nil")
 	}
-
-	_, err = tx.Exec("INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", data.Client.GetId(), authorizeData.Code, prev, data.AccessToken, data.RefreshToken, data.ExpiresIn, data.Scope, data.RedirectUri, data.CreatedAt.UTC(), extra)
+	_, err = tx.Exec(saveAccess, data.Client.GetId(), authorizeData.Code, prev, data.AccessToken, data.RefreshToken, data.ExpiresIn, data.Scope, data.RedirectUri, data.CreatedAt.UTC(), extra)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
 			s.errFn(logrus.Fields{"id": data.Client.GetId()}, rbe.Error())
@@ -312,6 +326,8 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 	return nil
 }
 
+const loadAccess = `SELECT client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
+	FROM access WHERE access_token=? LIMIT 1`
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
@@ -319,10 +335,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	var result osin.AccessData
 
 	var acc acc
-	q := "SELECT " +
-		"client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra " +
-		"FROM access WHERE access_token=? LIMIT 1"
-	if err := s.conn.QueryRow(q, code).Scan(&acc); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(loadAccess, code).Scan(&acc); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		return nil, errors.Annotatef(err, "")
@@ -347,9 +360,10 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	return &result, nil
 }
 
+const removeAccess = "DELETE FROM access WHERE access_token=?"
 // RemoveAccess revokes or deletes an AccessData.
 func (s *stor) RemoveAccess(code string) (err error) {
-	_, err = s.conn.Exec("DELETE FROM access WHERE access_token=?", code)
+	_, err = s.conn.Exec(removeAccess, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -358,13 +372,13 @@ func (s *stor) RemoveAccess(code string) (err error) {
 	return nil
 }
 
+const loadRefresh = "SELECT access FROM refresh WHERE token=? LIMIT 1"
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	var ref ref
-	q := "SELECT access FROM refresh WHERE token=? LIMIT 1"
-	if err := s.conn.QueryRow(q, code).Scan(&ref); err == pgx.ErrNoRows {
+	if err := s.conn.QueryRow(loadRefresh, code).Scan(&ref); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 
@@ -373,9 +387,10 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	return s.LoadAccess(ref.Access)
 }
 
+const removeRefresh = "DELETE FROM refresh WHERE token=?"
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *stor) RemoveRefresh(code string) error {
-	_, err := s.conn.Exec("DELETE FROM refresh WHERE token=?", code)
+	_, err := s.conn.Exec(removeRefresh, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -384,8 +399,9 @@ func (s *stor) RemoveRefresh(code string) error {
 	return nil
 }
 
+const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?0, ?1)"
 func (s *stor) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) {
-	_, err = tx.Exec("INSERT INTO refresh (token, access) VALUES (?0, ?1)", refresh, access)
+	_, err = tx.Exec(saveRefresh, refresh, access)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
 			s.errFn(logrus.Fields{"code": access, "table": "refresh", "operation": "insert"}, rbe.Error())
