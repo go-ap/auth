@@ -155,14 +155,14 @@ func (s *stor) Open() error {
 	return nil
 }
 
-const getClients = "SELECT id, secret, redirect_uri, extra FROM client;"
+const getClients = "SELECT code, secret, redirect_uri, extra FROM client;"
 
 // ListClients
 func (s *stor) ListClients() ([]osin.Client, error) {
 	return nil, errNotImplemented
 }
 
-const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?;"
+const getClient = "SELECT code, secret, redirect_uri, extra FROM client WHERE code=?;"
 
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
@@ -184,21 +184,21 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 	return &c, err
 }
 
-const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1"
+const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?, ?, ?) WHERE code=?"
 
 // UpdateClient
 func (s *stor) UpdateClient(c osin.Client) error {
 	return errNotImplemented
 }
 
-const createClient = "INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)"
+const createClient = "INSERT INTO client (code, secret, redirect_uri, extra) VALUES (?, ?, ?, ?)"
 
 // CreateClient
 func (s *stor) CreateClient(c osin.Client) error {
 	return errNotImplemented
 }
 
-const removeClient = "DELETE FROM client WHERE id=?"
+const removeClient = "DELETE FROM client WHERE code=?"
 
 // RemoveClient
 func (s *stor) RemoveClient(id string) error {
@@ -206,7 +206,7 @@ func (s *stor) RemoveClient(id string) error {
 }
 
 const saveAuthorize = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) 
-	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 // SaveAuthorize saves authorize data.
 func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
@@ -228,7 +228,7 @@ func (s *stor) RemoveAuthorize(code string) error {
 }
 
 const saveAccess = `INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
-	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // SaveAccess writes AccessData.
 func (s *stor) SaveAccess(data *osin.AccessData) error {
@@ -264,4 +264,4 @@ func (s *stor) RemoveRefresh(code string) error {
 	return errNotImplemented
 }
 
-const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?0, ?1)"
+const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?, ?)"
