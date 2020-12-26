@@ -166,22 +166,23 @@ const getClient = "SELECT code, secret, redirect_uri, extra FROM client WHERE co
 
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
-	var c osin.DefaultClient
+	var c *osin.DefaultClient
 	rows, err := s.conn.Query(getClient, id)
-	if err == sql.ErrNoRows {
+	if err == sql.ErrNoRows || rows.Err() == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "select"}, "%s", err)
-		return &c, errors.Annotatef(err, "Storage query error")
+		s.errFn(logrus.Fields{"code": id, "table": "client", "operation": "select"}, "%s", err)
+		return c, errors.Annotatef(err, "Storage query error")
 	}
 	for rows.Next() {
+		c = new(osin.DefaultClient)
 		err = rows.Scan(&c.Id, &c.Secret, &c.RedirectUri, &c.UserData)
 		if err != nil {
 			break
 		}
 	}
 
-	return &c, err
+	return c, err
 }
 
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?, ?, ?) WHERE code=?"
