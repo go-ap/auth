@@ -76,23 +76,24 @@ type Config struct {
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
 
-const createClientTable = `create table "client"(
+const createClientTable = `CREATE TABLE "client"(
 	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
+	"code" TEXT UNIQUE NOT NULL,
 	"secret" TEXT NOT NULL,
 	"redirect_uri" TEXT NOT NULL,
-	"extra"
+	"extra" BLOB
 );`
 
 const createAuthorizeTable = `CREATE TABLE "authorize" (
 	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
-	"client_id" INTEGER REFERENCES client(id),
-	"code" TEXT NOT NULL,
+	"client_id" INTEGER REFERENCES client(code),
+	"code" TEXT UNIQUE NOT NULL,
 	"expires_in" INTEGER,
-	"scope",
+	"scope" BLOB,
 	"redirect_uri" TEXT NOT NULL,
-	"state",
+	"state" BLOB,
 	"created_at" DEFAULT CURRENT_TIMESTAMP,
-	"extra"
+	"extra" BLOB
 );`
 
 const createAccessTable = `CREATE TABLE "access" (
@@ -103,11 +104,12 @@ const createAccessTable = `CREATE TABLE "access" (
 	"access_token" TEXT NOT NULL,
 	"refresh_token" TEXT NOT NULL,
 	"expires_in" INTEGER,
-	"scope",
+	"scope" BLOB,
 	"redirect_uri" TEXT NOT NULL,
 	"created_at" DEFAULT CURRENT_TIMESTAMP,
-	"extra"
+	"extra" BLOB
 );`
+
 const createRefreshTable = `CREATE TABLE "refresh" (
 	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
 	"access" TEXT NOT NULL REFERENCES access(access_token),
