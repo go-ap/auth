@@ -177,6 +177,9 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1"
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
 func (s *stor) UpdateClient(c osin.Client) error {
+	if c == nil {
+		return errors.Newf("invalid nil client to update")
+	}
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
