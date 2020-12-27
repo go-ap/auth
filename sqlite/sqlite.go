@@ -77,17 +77,15 @@ type Config struct {
 var errNotImplemented = errors.NotImplementedf("not implemented")
 
 const createClientTable = `CREATE TABLE "client"(
-	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
-	"code" TEXT UNIQUE NOT NULL,
+	"code" TEXT PRIMARY KEY NOT NULL,
 	"secret" TEXT NOT NULL,
 	"redirect_uri" TEXT NOT NULL,
 	"extra" BLOB
 );`
 
 const createAuthorizeTable = `CREATE TABLE "authorize" (
-	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
-	"client_id" INTEGER REFERENCES client(code),
-	"code" TEXT UNIQUE NOT NULL,
+	"code" TEXT PRIMARY KEY NOT NULL,
+	"client" INTEGER REFERENCES client(code),
 	"expires_in" INTEGER,
 	"scope" BLOB,
 	"redirect_uri" TEXT NOT NULL,
@@ -97,9 +95,8 @@ const createAuthorizeTable = `CREATE TABLE "authorize" (
 );`
 
 const createAccessTable = `CREATE TABLE "access" (
-	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
-	"client_id" INTEGER REFERENCES client(id),
-	"authorize_id" INTEGER REFERENCES authorize(id),
+	"client" INTEGER REFERENCES client(code),
+	"authorize" INTEGER REFERENCES authorize(code),
 	"previous" TEXT NOT NULL,
 	"access_token" TEXT NOT NULL,
 	"refresh_token" TEXT NOT NULL,
@@ -111,9 +108,8 @@ const createAccessTable = `CREATE TABLE "access" (
 );`
 
 const createRefreshTable = `CREATE TABLE "refresh" (
-	"id" INTEGER PRIMARY KEY ASC AUTOINCREMENT,
-	"access" TEXT NOT NULL REFERENCES access(access_token),
-	"token" TEXT NOT NULL
+	"access_token" TEXT NOT NULL REFERENCES access(access_token),
+	"token" TEXT PRIMARY KEY NOT NULL
 );`
 
 func Bootstrap(db *sql.DB, cl osin.Client) error {
