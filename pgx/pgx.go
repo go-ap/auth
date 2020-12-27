@@ -130,7 +130,29 @@ func (s *stor) Open() error {
 const getClients = "SELECT id, secret, redirect_uri, extra FROM client;"
 // ListClients
 func (s *stor) ListClients() ([]osin.Client, error) {
-	return nil, errNotImplemented
+	result := make([]osin.Client, 0)
+	rows, err := s.conn.Query(getClients)
+	if err == pgx.ErrNoRows {
+		return nil, errors.NewNotFound(err, "")
+	} else if err != nil {
+		s.errFn(logrus.Fields{"table": "client", "operation": "select"}, "%s", err)
+		return result, errors.Annotatef(err, "Storage query error")
+	}
+	for rows.Next() {
+		var cl cl
+		c := new(osin.DefaultClient)
+		err = rows.Scan(&cl)
+		if err != nil {
+			continue
+		}
+		c.Id = cl.Id
+		c.Secret = cl.Secret
+		c.RedirectUri = cl.RedirectUri
+		c.UserData = cl.Extra
+		result = append(result, c)
+	}
+
+	return result, err
 }
 
 const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
