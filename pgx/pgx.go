@@ -196,6 +196,9 @@ func (s *stor) UpdateClient(c osin.Client) error {
 const createClient = "INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)"
 // CreateClient stores the client in the database and returns an error, if something went wrong.
 func (s *stor) CreateClient(c osin.Client) error {
+	if c == nil {
+		return errors.Newf("invalid nil client to create")
+	}
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
@@ -211,8 +214,8 @@ func (s *stor) CreateClient(c osin.Client) error {
 
 const removeClient = "DELETE FROM client WHERE id=?"
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
-func (s *stor) RemoveClient(id string) (err error) {
-	if _, err = s.conn.Exec(removeClient, id); err != nil {
+func (s *stor) RemoveClient(id string) error {
+	if _, err := s.conn.Exec(removeClient, id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -286,8 +289,8 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 const removeAuthorize = "DELETE FROM authorize WHERE code=?"
 // RemoveAuthorize revokes or deletes the authorization code.
-func (s *stor) RemoveAuthorize(code string) (err error) {
-	if _, err = s.conn.Exec(removeAuthorize, code); err != nil {
+func (s *stor) RemoveAuthorize(code string) error {
+	if _, err := s.conn.Exec(removeAuthorize, code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -387,8 +390,8 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 
 const removeAccess = "DELETE FROM access WHERE access_token=?"
 // RemoveAccess revokes or deletes an AccessData.
-func (s *stor) RemoveAccess(code string) (err error) {
-	_, err = s.conn.Exec(removeAccess, code)
+func (s *stor) RemoveAccess(code string) error {
+	_, err := s.conn.Exec(removeAccess, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
