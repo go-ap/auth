@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
@@ -80,7 +82,7 @@ const createClientTable = `CREATE TABLE "client"(
 	"code" TEXT PRIMARY KEY NOT NULL,
 	"secret" TEXT NOT NULL,
 	"redirect_uri" TEXT NOT NULL,
-	"extra" BLOB
+	"extra" BLOB DEFAULT '{}'
 );`
 
 const createAuthorizeTable = `CREATE TABLE "authorize" (
@@ -91,7 +93,7 @@ const createAuthorizeTable = `CREATE TABLE "authorize" (
 	"redirect_uri" TEXT NOT NULL,
 	"state" BLOB,
 	"created_at" DEFAULT CURRENT_TIMESTAMP,
-	"extra" BLOB
+	"extra" BLOB DEFAULT '{}'
 );`
 
 const createAccessTable = `CREATE TABLE "access" (
@@ -101,10 +103,10 @@ const createAccessTable = `CREATE TABLE "access" (
 	"access_token" TEXT NOT NULL,
 	"refresh_token" TEXT NOT NULL,
 	"expires_in" INTEGER,
-	"scope" BLOB,
+	"scope" BLOB DEFAULT NULL,
 	"redirect_uri" TEXT NOT NULL,
 	"created_at" DEFAULT CURRENT_TIMESTAMP,
-	"extra" BLOB
+	"extra" BLOB DEFAULT '{}'
 );`
 
 const createRefreshTable = `CREATE TABLE "refresh" (
@@ -199,10 +201,33 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 }
 
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?, ?, ?) WHERE code=?"
+const updateClientNoExtra = "UPDATE client SET (secret, redirect_uri) = (?, ?) WHERE code=?"
 
 // UpdateClient
 func (s *stor) UpdateClient(c osin.Client) error {
-	return errNotImplemented
+	if c == nil {
+		return errors.Newf("invalid nil client to update")
+	}
+	data, err := assertToBytes(c.GetUserData())
+	if err != nil {
+		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		return err
+	}
+
+	params := []interface{}{
+		c.GetSecret(),
+		c.GetRedirectUri(),
+	}
+	q := updateClientNoExtra
+	if data != nil {
+		q = updateClient
+		params = append(params, interface{}(data))
+	}
+	if _, err := s.conn.Exec(q, params...); err != nil {
+		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
+		return errors.Annotatef(err, "")
+	}
+	return nil
 }
 
 const createClient = "INSERT INTO client (code, secret, redirect_uri, extra) VALUES (?, ?, ?, ?)"
@@ -279,3 +304,20 @@ func (s *stor) RemoveRefresh(code string) error {
 }
 
 const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?, ?)"
+
+func assertToBytes(in interface{}) ([]byte, error) {
+	var ok bool
+	var data string
+	if in == nil {
+		return nil, nil
+	} else if data, ok = in.(string); ok {
+		return []byte(data), nil
+	} else if byt, ok := in.([]byte); ok {
+		return byt, nil
+	} else if byt, ok := in.(json.RawMessage); ok {
+		return byt, nil
+	} else if str, ok := in.(fmt.Stringer); ok {
+		return []byte(str.String()), nil
+	}
+	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
+}

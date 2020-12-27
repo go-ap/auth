@@ -9,7 +9,6 @@ import (
 	"path"
 	"reflect"
 	"testing"
-	"time"
 )
 
 var (
@@ -22,21 +21,15 @@ var (
 )
 type initFn func(db *sql.DB) error
 
-/*
-create table client (
-	code INTEGER primary key autoincrement,
-	secret TEXT not null,
-	redirect_uri TEXT not null,
-	extra BLOB,
-	code text
-);
-create unique index client_code_uindex on client (code);
-*/
+func testPath(t *testing.T) string {
+	where := t.TempDir()
+	return path.Join(where, fmt.Sprintf("%s.sqlite", path.Clean(t.Name())))
+}
+
 func initialize(t *testing.T, fns ...initFn) *stor {
-	file := path.Join(os.TempDir(), fmt.Sprintf("test-%d.sqlite", time.Now().UTC().Unix()))
-	os.RemoveAll(file)
-	//cwd, _ := os.Getwd()
-	//file := path.Join(cwd, "identifier.sqlite")
+	file := testPath(t)
+	os.RemoveAll(path.Dir(file))
+	os.MkdirAll(path.Dir(file), 0770)
 	db, err := sql.Open("sqlite", file)
 	if err != nil {
 		t.Fatalf("Unable to initialize sqlite db: %s", err)
@@ -459,7 +452,41 @@ func Test_stor_UpdateClient(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:    "empty",
+			args:    args{nil},
+			wantErr: true,
+		},
+		{
+			name: "plain",
+			init: []initFn{
+				func(db *sql.DB) error {
+					_, err := db.Exec(createClient, "found", "test", "test", interface{}("test"))
+					return err
+				},
+			},
+			args: args{
+				&osin.DefaultClient{
+					Id:          "found",
+					Secret:      "secret",
+					RedirectUri: "redirURI",
+					UserData:    interface{}("extra123"),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "plain",
+			args:    args{
+				&osin.DefaultClient{
+					Id:          "found",
+					Secret:      "secret",
+					RedirectUri: "redirURI",
+					UserData:    nil,
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
