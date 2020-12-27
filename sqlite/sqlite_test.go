@@ -130,20 +130,20 @@ func Test_stor_GetClient(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "missing",
-			args: args{ code: "missing" },
-			want: nil,
+			name:    "missing",
+			args:    args{code: "missing"},
+			want:    nil,
 			wantErr: false,
 		},
 		{
 			name: "found",
-			init: []initFn {
+			init: []initFn{
 				func(db *sql.DB) error {
 					_, err := db.Exec(createClient, "found", "secret", "redirURI", interface{}("extra123"))
 					return err
 				},
 			},
-			args: args{ code: "found" },
+			args: args{code: "found"},
 			want: &osin.DefaultClient{
 				Id:          "found",
 				Secret:      "secret",
@@ -152,7 +152,7 @@ func Test_stor_GetClient(t *testing.T) {
 			},
 			wantErr: false,
 		},
-}
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := initialize(t, tt.init...)
@@ -176,7 +176,29 @@ func Test_stor_ListClients(t *testing.T) {
 		want    []osin.Client
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:    "missing",
+			want:    []osin.Client{},
+			wantErr: false,
+		},
+		{
+		name: "found",
+			init: []initFn{
+				func(db *sql.DB) error {
+					_, err := db.Exec(createClient, "found", "secret", "redirURI", interface{}("extra123"))
+					return err
+				},
+			},
+			want: []osin.Client{
+				&osin.DefaultClient{
+					Id:          "found",
+					Secret:      "secret",
+					RedirectUri: "redirURI",
+					UserData:    interface{}("extra123"),
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
