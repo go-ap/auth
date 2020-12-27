@@ -59,7 +59,7 @@ type Config struct {
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
 
-// stor implements interface "github.com/RangelReale/osin".Storage and interface "github.com/ory/osin-storage".Storage
+// stor implements interface osin.Storage
 type stor struct {
 	conn  *pgx.Conn
 	conf  Config
