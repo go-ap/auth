@@ -6,10 +6,10 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/go-ap/activitypub v0.0.0-20201230131902-22a1b093fa24
-	github.com/go-ap/client v0.0.0-20201230173855-ad52aff6ff0b
+	github.com/go-ap/activitypub v0.0.0-20201231093705-c478a2826802
+	github.com/go-ap/client v0.0.0-20201231093747-65d3179116cd
 	github.com/go-ap/errors v0.0.0-20200702155720-f662512ba418
-	github.com/go-ap/storage v0.0.0-20201230132216-f7daeccf4af0
+	github.com/go-ap/storage v0.0.0-20201231093811-fe698d84ec32
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/uuid v1.1.1 // indirect
