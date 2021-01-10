@@ -7,10 +7,10 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/go-ap/activitypub v0.0.0-20210109173738-56bfed629b95
-	github.com/go-ap/client v0.0.0-20210109180226-efbf4fc6994e
+	github.com/go-ap/activitypub v0.0.0-20210110195435-cc0968f78b0e
+	github.com/go-ap/client v0.0.0-20210110195549-f6cbf696e88a
 	github.com/go-ap/errors v0.0.0-20200702155720-f662512ba418
-	github.com/go-ap/storage v0.0.0-20210109180350-3c4a46cd40cd
+	github.com/go-ap/storage v0.0.0-20210110195626-9dc1d16d8f2f
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/uuid v1.1.1 // indirect
