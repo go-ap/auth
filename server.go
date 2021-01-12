@@ -21,7 +21,7 @@ type Server struct {
 	baseURL string
 	account Account
 	os      *osin.Server
-	cl      client.ActivityPub
+	cl      client.Basic
 	st      storage.ActorLoader
 	l       logrus.FieldLogger
 }

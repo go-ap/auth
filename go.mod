@@ -8,7 +8,7 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/go-ap/activitypub v0.0.0-20210110195435-cc0968f78b0e
-	github.com/go-ap/client v0.0.0-20210110195549-f6cbf696e88a
+	github.com/go-ap/client v0.0.0-20210112111933-1d4f85373805
 	github.com/go-ap/errors v0.0.0-20200702155720-f662512ba418
 	github.com/go-ap/storage v0.0.0-20210110195626-9dc1d16d8f2f
 	github.com/go-chi/chi v4.1.2+incompatible

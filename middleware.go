@@ -34,10 +34,10 @@ type keyLoader struct {
 	realm   string
 	acc     pub.Actor
 	l       st.ActorLoader
-	c       client.ActivityPub
+	c       client.Basic
 }
 
-func loadFederatedActor(c client.ActivityPub, id pub.IRI) (pub.Actor, error) {
+func loadFederatedActor(c client.Basic, id pub.IRI) (pub.Actor, error) {
 	it, err := c.LoadIRI(id)
 	if err != nil {
 		return AnonymousActor, err
