@@ -22,11 +22,11 @@ type Server struct {
 	account Account
 	os      *osin.Server
 	cl      client.Basic
-	st      storage.ActorLoader
+	st      storage.ReadStore
 	l       logrus.FieldLogger
 }
 
-func New(url string, os *osin.Server, st storage.ActorLoader, l logrus.FieldLogger) *Server {
+func New(url string, os *osin.Server, st storage.ReadStore, l logrus.FieldLogger) *Server {
 	return &Server{
 		baseURL: url,
 		account: Account{actor: AnonymousActor},

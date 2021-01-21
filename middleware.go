@@ -33,7 +33,7 @@ type keyLoader struct {
 	logFn   func(string, ...interface{})
 	realm   string
 	acc     pub.Actor
-	l       st.ActorLoader
+	l       st.ReadStore
 	c       client.Basic
 }
 
@@ -73,15 +73,22 @@ func (k *keyLoader) GetKey(id string) interface{} {
 	}
 
 	if err := validateLocalIRI(iri); err == nil {
-		actors, cnt, err := k.l.LoadActors(iri)
-		if err != nil || cnt == 0 {
+		ob, err := k.l.Load(iri)
+		if err != nil || ob == nil {
 			k.logFn("unable to find local account matching key id %s", iri)
 			return nil
 		}
-		actor := actors.First()
-		if acct, err := pub.ToActor(actor); err == nil {
-			k.acc = *acct
+		var actor pub.Item
+		if ob.IsCollection() {
+			pub.OnCollectionIntf(ob, func(col pub.CollectionInterface) error {
+				actor = col.Collection().First()
+				return nil
+			})
 		}
+		pub.OnActor(actor, func(a *pub.Actor) error {
+			k.acc = *a
+			return nil
+		})
 	} else {
 		// @todo(queue_support): this needs to be moved to using queues
 		k.acc, err = loadFederatedActor(k.c, iri)
@@ -115,8 +122,23 @@ type oauthLoader struct {
 	logFn func(string, ...interface{})
 	acc   pub.Actor
 	s     *osin.Server
-	l     st.ActorLoader
+	l     st.ReadStore
 }
+
+func firstOrItem(it pub.Item) (pub.Item, error) {
+	if it.IsCollection() {
+		err := pub.OnCollectionIntf(it, func(col pub.CollectionInterface) error {
+			it = col.Collection().First()
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return it, nil
+}
+
+func unauthorized(err error) error { return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token") }
 
 func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	bearer := osin.CheckBearerAuth(r)
@@ -128,18 +150,23 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 		return err, ""
 	}
 	if iri, ok := dat.UserData.(string); ok {
-		accessActors, cnt, err := k.l.LoadActors(pub.IRI(iri))
+		it, err := k.l.Load(pub.IRI(iri))
 		if err != nil {
-			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
+			return unauthorized(err), ""
 		}
-		if cnt == 0 {
-			return errors.Unauthorizedf("Unable to validate actor from Bearer token"), ""
+		if it == nil {
+			return unauthorized(err), ""
 		}
-		act, err := pub.ToActor(accessActors.First())
+		if it, err = firstOrItem(it); err != nil {
+			return unauthorized(err), ""
+		}
+		err = pub.OnActor(it, func(act *pub.Actor) error {
+			k.acc = *act
+			return nil
+		})
 		if err != nil {
-			return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token"), ""
+			return unauthorized(err), ""
 		}
-		k.acc = *act
 	} else {
 		return errors.Unauthorizedf("unable to load from bearer"), ""
 	}
