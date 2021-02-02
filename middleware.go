@@ -74,7 +74,7 @@ func (k *keyLoader) GetKey(id string) interface{} {
 
 	if err := validateLocalIRI(iri); err == nil {
 		ob, err := k.l.Load(iri)
-		if err != nil || ob == nil {
+		if err != nil || pub.IsNil(ob) {
 			k.logFn("unable to find local account matching key id %s", iri)
 			return nil
 		}
@@ -154,7 +154,7 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 		if err != nil {
 			return unauthorized(err), ""
 		}
-		if it == nil {
+		if pub.IsNil(it) {
 			return unauthorized(err), ""
 		}
 		if it, err = firstOrItem(it); err != nil {
