@@ -96,13 +96,15 @@ func mkDirIfNotExists(p string) error {
 
 // New returns a new badger storage instance.
 func New(c Config) *stor {
-	fullPath := path.Clean(c.Path)
-	if err := mkDirIfNotExists(fullPath); err != nil {
-		return nil
+	if c.Path != "" {
+		fullPath := path.Clean(c.Path)
+		if err := mkDirIfNotExists(fullPath); err != nil {
+			return nil
+		}
+		c.Path = path.Join(fullPath, folder)
 	}
-	stPath := path.Join(fullPath, folder)
 	b := stor{
-		path:  stPath,
+		path:  c.Path,
 		host:  c.Host,
 		m:     sync.Mutex{},
 		logFn: log.EmptyLogFn,
@@ -123,6 +125,9 @@ func (s *stor) Open() error {
 	s.m.Lock()
 	var err error
 	c := badger.DefaultOptions(s.path).WithLogger(s.l)
+	if s.path == "" {
+		c.InMemory = true
+	}
 	s.d, err = badger.Open(c)
 	if err != nil {
 		err = errors.Annotatef(err, "unable to open storage")
