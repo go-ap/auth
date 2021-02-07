@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	pub "github.com/go-ap/activitypub"
@@ -140,6 +141,23 @@ func firstOrItem(it pub.Item) (pub.Item, error) {
 
 func unauthorized(err error) error { return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token") }
 
+func assertToBytes(in interface{}) ([]byte, error) {
+	var ok bool
+	var data string
+	if in == nil {
+		return nil, nil
+	} else if data, ok = in.(string); ok {
+		return []byte(data), nil
+	} else if byt, ok := in.([]byte); ok {
+		return byt, nil
+	} else if byt, ok := in.(json.RawMessage); ok {
+		return byt, nil
+	} else if str, ok := in.(fmt.Stringer); ok {
+		return []byte(str.String()), nil
+	}
+	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
+}
+
 func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	bearer := osin.CheckBearerAuth(r)
 	if bearer == nil {
@@ -149,7 +167,7 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	if err != nil {
 		return err, ""
 	}
-	if iri, ok := dat.UserData.(string); ok {
+	if iri, err := assertToBytes(dat.UserData); err == nil {
 		it, err := k.l.Load(pub.IRI(iri))
 		if err != nil {
 			return unauthorized(err), ""
