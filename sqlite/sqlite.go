@@ -9,13 +9,18 @@ import (
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	_ "modernc.org/sqlite"
+	"os"
+	"path"
+	"path/filepath"
+	"sync"
 	"time"
 )
 
 // New returns a new filesystem storage instance.
 func New(c Config) *stor {
+	p, _ := getFullPath(c)
 	s := new(stor)
-	s.path = c.Path
+	s.path = p
 	s.logFn = log.EmptyLogFn
 	s.errFn = log.EmptyLogFn
 
@@ -31,6 +36,7 @@ func New(c Config) *stor {
 type stor struct {
 	path  string
 	conn  *sql.DB
+	m     sync.RWMutex
 	logFn log.LoggerFn
 	errFn log.LoggerFn
 }
@@ -43,53 +49,104 @@ type Config struct {
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
 
-const createClientTable = `CREATE TABLE "client"(
-	"code" TEXT PRIMARY KEY NOT NULL,
-	"secret" TEXT NOT NULL,
-	"redirect_uri" TEXT NOT NULL,
+const createClientTable = `CREATE TABLE IF NOT EXISTS "client"(
+	"code" varchar constraint client_code_pkey PRIMARY KEY,
+	"secret" varchar NOT NULL,
+	"redirect_uri" varchar NOT NULL,
 	"extra" BLOB DEFAULT '{}'
-);`
+);
+`
 
-const createAuthorizeTable = `CREATE TABLE "authorize" (
-	"code" TEXT PRIMARY KEY NOT NULL,
-	"client" INTEGER REFERENCES client(code),
+const createAuthorizeTable = `CREATE TABLE IF NOT EXISTS "authorize" (
+	"code" varchar constraint authorize_code_pkey PRIMARY KEY,
+	"client" varchar REFERENCES client(code),
 	"expires_in" INTEGER,
 	"scope" BLOB,
-	"redirect_uri" TEXT NOT NULL,
+	"redirect_uri" varchar NOT NULL,
 	"state" BLOB,
-	"created_at" DEFAULT CURRENT_TIMESTAMP,
+	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
 	"extra" BLOB DEFAULT '{}'
-);`
+);
+`
 
-const createAccessTable = `CREATE TABLE "access" (
-	"client" INTEGER REFERENCES client(code),
-	"authorize" INTEGER REFERENCES authorize(code),
-	"previous" TEXT NOT NULL,
-	"access_token" TEXT NOT NULL,
-	"refresh_token" TEXT NOT NULL,
+const createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
+	"client" varchar REFERENCES client(code),
+	"authorize" varchar REFERENCES authorize(code),
+	"previous" varchar NOT NULL,
+	"access_token" varchar NOT NULL,
+	"refresh_token" varchar NOT NULL,
 	"expires_in" INTEGER,
 	"scope" BLOB DEFAULT NULL,
-	"redirect_uri" TEXT NOT NULL,
-	"created_at" DEFAULT CURRENT_TIMESTAMP,
+	"redirect_uri" varchar NOT NULL,
+	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
 	"extra" BLOB DEFAULT '{}'
-);`
+);
+`
 
-const createRefreshTable = `CREATE TABLE "refresh" (
+const createRefreshTable = `CREATE TABLE IF NOT EXISTS "refresh" (
 	"access_token" TEXT NOT NULL REFERENCES access(access_token),
 	"token" TEXT PRIMARY KEY NOT NULL
-);`
+);
+`
 
-func Bootstrap(db *sql.DB, cl osin.Client) error {
-	if _, err := db.Query(createClientTable); err != nil {
+func getAbsStoragePath(p string) (string, error) {
+	if !filepath.IsAbs(p) {
+		var err error
+		p, err = filepath.Abs(p)
+		if err != nil {
+			return "", err
+		}
+	}
+	return p, nil
+}
+
+func mkDirIfNotExists(p string) error {
+	fi, err := os.Stat(p)
+	if err != nil && os.IsNotExist(err) {
+		err = os.MkdirAll(p, os.ModeDir|os.ModePerm|0700)
+	}
+	if err != nil {
 		return err
 	}
-	if _, err := db.Query(createAuthorizeTable); err != nil {
+	fi, err = os.Stat(p)
+	if err != nil {
+		return err
+	} else if !fi.IsDir() {
+		return errors.Errorf("path exists, and is not a folder %s", p)
+	}
+	return nil
+}
+
+func getFullPath(c Config) (string, error) {
+	p, _ := getAbsStoragePath(c.Path)
+	if err := mkDirIfNotExists(path.Dir(p)); err != nil {
+		return "memory", err
+	}
+	return path.Join(p, "oauth.sqlite"), nil
+}
+
+func Bootstrap(c Config, cl osin.Client) error {
+	p, err := getFullPath(c)
+	if err != nil {
 		return err
 	}
-	if _, err := db.Query(createAccessTable); err != nil {
+	os.RemoveAll(p)
+
+	s := New(c)
+	if err := s.Open(); err != nil {
 		return err
 	}
-	if _, err := db.Query(createRefreshTable); err != nil {
+	defer s.Close()
+	if _, err := s.conn.Query(createClientTable); err != nil {
+		return err
+	}
+	if _, err := s.conn.Query(createAuthorizeTable); err != nil {
+		return err
+	}
+	if _, err := s.conn.Query(createAccessTable); err != nil {
+		return err
+	}
+	if _, err := s.conn.Query(createRefreshTable); err != nil {
 		return err
 	}
 
@@ -106,6 +163,7 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
+	s.m.Unlock()
 	s.conn.Close()
 }
 
@@ -115,6 +173,7 @@ func (s *stor) Open() error {
 	if s.conn, err = sql.Open("sqlite", s.path); err != nil {
 		return errors.Annotatef(err, "could not open sqlite connection")
 	}
+	s.m.Lock()
 	return nil
 }
 
@@ -142,16 +201,16 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 	return result, err
 }
 
-const getClient = "SELECT code, secret, redirect_uri, extra FROM client WHERE code=?;"
+const getClientSQL = "SELECT code, secret, redirect_uri, extra FROM client WHERE code=?;"
 
-// GetClient
-func (s *stor) GetClient(id string) (osin.Client, error) {
+func getClient(conn *sql.DB, id string) (osin.Client, error) {
 	var c *osin.DefaultClient
-	rows, err := s.conn.Query(getClient, id)
-	if err == sql.ErrNoRows || rows.Err() == sql.ErrNoRows {
-		return nil, errors.NewNotFound(err, "")
-	} else if err != nil {
-		s.errFn(logrus.Fields{"code": id, "table": "client", "operation": "select"}, "%s", err)
+	rows, err := conn.Query(getClientSQL, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.NewNotFound(err, "")
+		}
+		//s.errFn(logrus.Fields{"code": id, "table": "client", "operation": "select"}, "%s", err)
 		return c, errors.Annotatef(err, "Storage query error")
 	}
 	for rows.Next() {
@@ -164,6 +223,14 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 
 	return c, err
 }
+// GetClient
+func (s *stor) GetClient(id string) (osin.Client, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return getClient(s.conn, id)
+}
 
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?, ?, ?) WHERE code=?"
 const updateClientNoExtra = "UPDATE client SET (secret, redirect_uri) = (?, ?) WHERE code=?"
@@ -173,6 +240,11 @@ func (s *stor) UpdateClient(c osin.Client) error {
 	if c == nil {
 		return errors.Newf("invalid nil client to update")
 	}
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
+
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
@@ -203,6 +275,11 @@ func (s *stor) CreateClient(c osin.Client) error {
 	if c == nil {
 		return errors.Newf("invalid nil client to create")
 	}
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
+
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
@@ -230,6 +307,10 @@ const removeClient = "DELETE FROM client WHERE code=?"
 
 // RemoveClient
 func (s *stor) RemoveClient(id string) error {
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	if _, err := s.conn.Exec(removeClient, id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -248,6 +329,10 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	if data == nil {
 		return errors.Newf("invalid nil authorize to save")
 	}
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
@@ -276,46 +361,61 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	return nil
 }
 
-const loadAuthorize = "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
+const loadAuthorizeSQL = "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
 
-// LoadAuthorize looks up AuthorizeData by a code.
-func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+func loadAuthorize(conn *sql.DB, code string) (*osin.AuthorizeData, error) {
 	var a *osin.AuthorizeData
 
-	rows, err := s.conn.Query(loadAuthorize, code)
+	rows, err := conn.Query(loadAuthorizeSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NotFoundf("")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
+		//s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
 		return nil, errors.Annotatef(err, "")
 	}
 
 	var client string
 	for rows.Next() {
 		a = new(osin.AuthorizeData)
-		err = rows.Scan(&client, &a.Code, &a.ExpiresIn, &a.Scope, &a.RedirectUri, &a.State, &a.CreatedAt, &a.UserData)
+		var createdAt string
+		err = rows.Scan(&client, &a.Code, &a.ExpiresIn, &a.Scope, &a.RedirectUri, &a.State, &createdAt, &a.UserData)
 		if err != nil {
 			return nil, errors.Annotatef(err, "unable to load authorize data")
 		}
 
 		if len(client) > 0 {
-			a.Client, _ = s.GetClient(client)
+			a.Client, _ = getClient(conn, client)
 		}
 
+		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", createdAt)
 		if a.ExpireAt().Before(time.Now().UTC()) {
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			//s.errFn(logrus.Fields{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
 		break
 	}
 
 	return a, nil
+	
+}
+
+// LoadAuthorize looks up AuthorizeData by a code.
+func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return loadAuthorize(s.conn, code)
 }
 
 const removeAuthorize = "DELETE FROM authorize WHERE code=?"
 
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *stor) RemoveAuthorize(code string) error {
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	if _, err := s.conn.Exec(removeAuthorize, code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -345,6 +445,10 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return err
 	}
+	if err = s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 
 	tx, err := s.conn.Begin()
 	if err != nil {
@@ -392,13 +496,12 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	return nil
 }
 
-const loadAccess = `SELECT client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
+const loadAccessSQL = `SELECT client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
 	FROM access WHERE access_token=? LIMIT 1`
 
-// LoadAccess retrieves access data by token. Client information MUST be loaded together.
-func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+func loadAccess(conn *sql.DB, code string) (*osin.AccessData, error) {
 	var a *osin.AccessData
-	rows, err := s.conn.Query(loadAccess, code)
+	rows, err := conn.Query(loadAccessSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
@@ -406,24 +509,26 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	}
 	for rows.Next() {
 		a = new(osin.AccessData)
-		var client, authorize, prev string
-		err = rows.Scan(&client, &authorize, &prev, &a.AccessToken, &a.RefreshToken, &a.ExpiresIn, &a.Scope, &a.CreatedAt, &a.UserData)
+		var client, authorize, prev, createdAt string
+		err = rows.Scan(&client, &authorize, &prev, &a.AccessToken, &a.RefreshToken, &a.ExpiresIn, &a.RedirectUri,
+			&a.Scope, &createdAt, &a.UserData)
 		if err != nil {
 			return nil, errors.Annotatef(err, "unable to load authorize data")
 		}
 
 		if len(client) > 0 {
-			a.Client, _ = s.GetClient(client)
+			a.Client, _ = getClient(conn, client)
 		}
 		if len(authorize) > 0 {
-			a.AuthorizeData, _ = s.LoadAuthorize(authorize)
+			a.AuthorizeData, _ = loadAuthorize(conn, authorize)
 		}
 		if len(prev) > 0 {
-			a.AccessData, _ = s.LoadAccess(prev)
+			a.AccessData, _ = loadAccess(conn, prev)
 		}
 
+		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", createdAt)
 		if a.ExpireAt().Before(time.Now().UTC()) {
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			//s.errFn(logrus.Fields{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
 		break
@@ -432,10 +537,23 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	return a, nil
 }
 
+// LoadAccess retrieves access data by token. Client information MUST be loaded together.
+func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return loadAccess(s.conn, code)
+}
+
 const removeAccess = "DELETE FROM access WHERE access_token=?"
 
 // RemoveAccess revokes or deletes an AccessData.
 func (s *stor) RemoveAccess(code string) error {
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	_, err := s.conn.Exec(removeAccess, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
@@ -449,6 +567,10 @@ const loadRefresh = "SELECT access FROM refresh WHERE token=? LIMIT 1"
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
 	var access string
 	if err := s.conn.QueryRow(loadRefresh, code).Scan(access); err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
@@ -456,13 +578,17 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 		return nil, errors.Annotatef(err, "")
 	}
 
-	return s.LoadAccess(access)
+	return loadAccess(s.conn, access)
 }
 
 const removeRefresh = "DELETE FROM refresh WHERE token=?"
 
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *stor) RemoveRefresh(code string) error {
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	_, err := s.conn.Exec(removeRefresh, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
@@ -475,6 +601,10 @@ func (s *stor) RemoveRefresh(code string) error {
 const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?, ?)"
 
 func (s *stor) saveRefresh(tx *sql.Tx, refresh, access string) (err error) {
+	if err := s.Open(); err != nil {
+		return err
+	}
+	defer s.Close()
 	_, err = tx.Exec(saveRefresh, refresh, access)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
