@@ -71,7 +71,7 @@ const createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
 	"client" varchar REFERENCES client(code),
 	"authorize" varchar REFERENCES authorize(code),
 	"previous" varchar NOT NULL,
-	"access_token" varchar NOT NULL,
+	"token" varchar NOT NULL,
 	"refresh_token" varchar NOT NULL,
 	"expires_in" INTEGER,
 	"scope" BLOB DEFAULT NULL,
@@ -82,7 +82,7 @@ const createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
 `
 
 const createRefreshTable = `CREATE TABLE IF NOT EXISTS "refresh" (
-	"access_token" TEXT NOT NULL REFERENCES access(access_token),
+	"access_token" TEXT NOT NULL REFERENCES access(token),
 	"token" TEXT PRIMARY KEY NOT NULL
 );
 `
@@ -219,6 +219,7 @@ func getClient(conn *sql.DB, id string) (osin.Client, error) {
 
 	return c, err
 }
+
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if err := s.Open(); err != nil {
@@ -392,7 +393,7 @@ func loadAuthorize(conn *sql.DB, code string) (*osin.AuthorizeData, error) {
 	}
 
 	return a, nil
-	
+
 }
 
 // LoadAuthorize looks up AuthorizeData by a code.
@@ -420,7 +421,7 @@ func (s *stor) RemoveAuthorize(code string) error {
 	return nil
 }
 
-const saveAccess = `INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
+const saveAccess = `INSERT INTO access (client, authorize, previous, token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // SaveAccess writes AccessData.
@@ -492,8 +493,8 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	return nil
 }
 
-const loadAccessSQL = `SELECT client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
-	FROM access WHERE access_token=? LIMIT 1`
+const loadAccessSQL = `SELECT client, authorize, previous, token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
+	FROM access WHERE token=? LIMIT 1`
 
 func loadAccess(conn *sql.DB, code string) (*osin.AccessData, error) {
 	var a *osin.AccessData
@@ -542,7 +543,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	return loadAccess(s.conn, code)
 }
 
-const removeAccess = "DELETE FROM access WHERE access_token=?"
+const removeAccess = "DELETE FROM access WHERE token=?"
 
 // RemoveAccess revokes or deletes an AccessData.
 func (s *stor) RemoveAccess(code string) error {
@@ -559,7 +560,7 @@ func (s *stor) RemoveAccess(code string) error {
 	return nil
 }
 
-const loadRefresh = "SELECT access FROM refresh WHERE token=? LIMIT 1"
+const loadRefresh = "SELECT access_token FROM refresh WHERE token=? LIMIT 1"
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
@@ -594,7 +595,7 @@ func (s *stor) RemoveRefresh(code string) error {
 	return nil
 }
 
-const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?, ?)"
+const saveRefresh = "INSERT INTO refresh (token, access_token) VALUES (?, ?)"
 
 func (s *stor) saveRefresh(tx *sql.Tx, refresh, access string) (err error) {
 	if err := s.Open(); err != nil {
