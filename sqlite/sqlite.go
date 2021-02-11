@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
@@ -36,7 +35,6 @@ func New(c Config) *stor {
 type stor struct {
 	path  string
 	conn  *sql.DB
-	m     sync.RWMutex
 	logFn log.LoggerFn
 	errFn log.LoggerFn
 }
@@ -163,7 +161,6 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
-	s.m.Unlock()
 	s.conn.Close()
 }
 
@@ -173,7 +170,6 @@ func (s *stor) Open() error {
 	if s.conn, err = sql.Open("sqlite", s.path); err != nil {
 		return errors.Annotatef(err, "could not open sqlite connection")
 	}
-	s.m.Lock()
 	return nil
 }
 
