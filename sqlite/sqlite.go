@@ -207,17 +207,17 @@ func getClient(conn *sql.DB, id string) (osin.Client, error) {
 			return nil, errors.NewNotFound(err, "")
 		}
 		//s.errFn(logrus.Fields{"code": id, "table": "client", "operation": "select"}, "%s", err)
-		return c, errors.Annotatef(err, "Storage query error")
+		return nil, errors.Annotatef(err, "Storage query error")
 	}
 	for rows.Next() {
 		c = new(osin.DefaultClient)
 		err = rows.Scan(&c.Id, &c.Secret, &c.RedirectUri, &c.UserData)
 		if err != nil {
-			break
+			return nil, errors.Annotatef(err, "Unable to load client information")
 		}
 	}
 
-	return c, err
+	return c, nil
 }
 
 // GetClient
