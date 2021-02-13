@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"time"
 )
+
+const defaultTimeout = 100*time.Millisecond
 
 // New returns a new filesystem storage instance.
 func New(c Config) *stor {
@@ -169,6 +172,8 @@ func Bootstrap(c Config, cl osin.Client) error {
 
 // Clone
 func (s *stor) Clone() osin.Storage {
+	// NOTICE(marius): osin, uses this before saving the Authorization data, and it fails if the database
+	// is not closed. This is why the tuneQuery journal_mode = WAL is needed.
 	return s
 }
 
@@ -177,7 +182,11 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
-	s.conn.Close()
+	err := s.conn.Close()
+	if err != nil {
+		s.errFn(logrus.Fields{"err": err.Error()}, "unable to close sqlite db")
+	}
+	s.conn = nil
 }
 
 // Open
@@ -194,7 +203,9 @@ const getClients = "SELECT code, secret, redirect_uri, extra FROM client;"
 // ListClients
 func (s *stor) ListClients() ([]osin.Client, error) {
 	result := make([]osin.Client, 0)
-	rows, err := s.conn.Query(getClients)
+
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	rows, err := s.conn.QueryContext(ctx, getClients)
 	if err == sql.ErrNoRows || rows.Err() == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
@@ -217,7 +228,8 @@ const getClientSQL = "SELECT code, secret, redirect_uri, extra FROM client WHERE
 
 func getClient(conn *sql.DB, id string) (osin.Client, error) {
 	var c *osin.DefaultClient
-	rows, err := conn.Query(getClientSQL, id)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	rows, err := conn.QueryContext(ctx, getClientSQL, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.NewNotFound(err, "")
@@ -273,7 +285,8 @@ func (s *stor) UpdateClient(c osin.Client) error {
 		q = updateClient
 		params = append(params, interface{}(data))
 	}
-	if _, err := s.conn.Exec(q, params...); err != nil {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err := s.conn.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -309,7 +322,8 @@ func (s *stor) CreateClient(c osin.Client) error {
 		params = append(params, interface{}(data))
 	}
 
-	if _, err := s.conn.Exec(q, params...); err != nil {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err := s.conn.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -324,7 +338,8 @@ func (s *stor) RemoveClient(id string) error {
 		return err
 	}
 	defer s.Close()
-	if _, err := s.conn.Exec(removeClient, id); err != nil {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err := s.conn.ExecContext(ctx, removeClient, id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -332,8 +347,9 @@ func (s *stor) RemoveClient(id string) error {
 	return nil
 }
 
-const saveAuthorizeNoExtra = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at ) 
-	VALUES (?, ?, ?, ?, ?, ?, ?);`
+const saveAuthorizeNoExtra = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at) 
+	VALUES (?, ?, ?, ?, ?, ?, ?);
+`
 const saveAuthorize = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?);`
 
@@ -367,8 +383,14 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 		params = append(params, extra)
 	}
 
-	if _, err = s.conn.Exec(q, params...); err != nil {
+	tx, err := s.conn.Begin()
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err = tx.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
+		return errors.Annotatef(err, "")
+	}
+	if err = tx.Commit(); err != nil {
+		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
@@ -379,7 +401,8 @@ const loadAuthorizeSQL = "SELECT client, code, expires_in, scope, redirect_uri, 
 func loadAuthorize(conn *sql.DB, code string) (*osin.AuthorizeData, error) {
 	var a *osin.AuthorizeData
 
-	rows, err := conn.Query(loadAuthorizeSQL, code)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	rows, err := conn.QueryContext(ctx, loadAuthorizeSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NotFoundf("")
 	} else if err != nil {
@@ -429,7 +452,8 @@ func (s *stor) RemoveAuthorize(code string) error {
 		return err
 	}
 	defer s.Close()
-	if _, err := s.conn.Exec(removeAuthorize, code); err != nil {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err := s.conn.ExecContext(ctx, removeAuthorize, code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
@@ -491,7 +515,8 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	if data.Client == nil {
 		return errors.Newf("data.Client must not be nil")
 	}
-	_, err = tx.Exec(saveAccess, params...)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	_, err = tx.ExecContext(ctx, saveAccess, params...)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
 			s.errFn(logrus.Fields{"id": data.Client.GetId()}, rbe.Error())
@@ -514,7 +539,8 @@ const loadAccessSQL = `SELECT client, authorize, previous, token, refresh_token,
 
 func loadAccess(conn *sql.DB, code string) (*osin.AccessData, error) {
 	var a *osin.AccessData
-	rows, err := conn.Query(loadAccessSQL, code)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	rows, err := conn.QueryContext(ctx, loadAccessSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
@@ -567,7 +593,8 @@ func (s *stor) RemoveAccess(code string) error {
 		return err
 	}
 	defer s.Close()
-	_, err := s.conn.Exec(removeAccess, code)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	_, err := s.conn.ExecContext(ctx, removeAccess, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -585,7 +612,8 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 	}
 	defer s.Close()
 	var access string
-	if err := s.conn.QueryRow(loadRefresh, code).Scan(access); err == sql.ErrNoRows {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if err := s.conn.QueryRowContext(ctx, loadRefresh, code).Scan(access); err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
 		return nil, errors.Annotatef(err, "")
@@ -602,7 +630,8 @@ func (s *stor) RemoveRefresh(code string) error {
 		return err
 	}
 	defer s.Close()
-	_, err := s.conn.Exec(removeRefresh, code)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	_, err := s.conn.ExecContext(ctx, removeRefresh, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
@@ -614,11 +643,8 @@ func (s *stor) RemoveRefresh(code string) error {
 const saveRefresh = "INSERT INTO refresh (token, access_token) VALUES (?, ?)"
 
 func (s *stor) saveRefresh(tx *sql.Tx, refresh, access string) (err error) {
-	if err := s.Open(); err != nil {
-		return err
-	}
-	defer s.Close()
-	_, err = tx.Exec(saveRefresh, refresh, access)
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	_, err = tx.ExecContext(ctx, saveRefresh, refresh, access)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
 			s.errFn(logrus.Fields{"code": access, "table": "refresh", "operation": "insert"}, rbe.Error())
