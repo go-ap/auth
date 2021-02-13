@@ -47,7 +47,8 @@ type Config struct {
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
 
-const createClientTable = `CREATE TABLE IF NOT EXISTS "client"(
+const (
+	createClientTable = `CREATE TABLE IF NOT EXISTS "client"(
 	"code" varchar constraint client_code_pkey PRIMARY KEY,
 	"secret" varchar NOT NULL,
 	"redirect_uri" varchar NOT NULL,
@@ -55,7 +56,7 @@ const createClientTable = `CREATE TABLE IF NOT EXISTS "client"(
 );
 `
 
-const createAuthorizeTable = `CREATE TABLE IF NOT EXISTS "authorize" (
+	createAuthorizeTable = `CREATE TABLE IF NOT EXISTS "authorize" (
 	"code" varchar constraint authorize_code_pkey PRIMARY KEY,
 	"client" varchar REFERENCES client(code),
 	"expires_in" INTEGER,
@@ -67,7 +68,7 @@ const createAuthorizeTable = `CREATE TABLE IF NOT EXISTS "authorize" (
 );
 `
 
-const createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
+	createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
 	"client" varchar REFERENCES client(code),
 	"authorize" varchar REFERENCES authorize(code),
 	"previous" varchar NOT NULL,
@@ -81,11 +82,23 @@ const createAccessTable = `CREATE TABLE IF NOT EXISTS "access" (
 );
 `
 
-const createRefreshTable = `CREATE TABLE IF NOT EXISTS "refresh" (
+	createRefreshTable = `CREATE TABLE IF NOT EXISTS "refresh" (
 	"access_token" TEXT NOT NULL REFERENCES access(token),
 	"token" TEXT PRIMARY KEY NOT NULL
 );
 `
+
+	tuneQuery = `
+-- Use WAL mode (writers don't block readers):
+PRAGMA journal_mode = 'WAL';
+-- Use memory as temporary storage:
+PRAGMA temp_store = 2;
+-- Faster synchronization that still keeps the data safe:
+PRAGMA synchronous = 1;
+-- Increase cache size (in this case to 64MB), the default is 2MB
+PRAGMA cache_size = -64000;
+`
+)
 
 func getAbsStoragePath(p string) (string, error) {
 	if !filepath.IsAbs(p) {
@@ -145,6 +158,9 @@ func Bootstrap(c Config, cl osin.Client) error {
 		return err
 	}
 	if _, err := s.conn.Query(createRefreshTable); err != nil {
+		return err
+	}
+	if _, err := s.conn.Query(tuneQuery); err != nil {
 		return err
 	}
 
