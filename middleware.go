@@ -161,11 +161,14 @@ func assertToBytes(in interface{}) ([]byte, error) {
 func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	bearer := osin.CheckBearerAuth(r)
 	if bearer == nil {
-		return errors.Newf("could not load bearer token from request"), ""
+		return errors.BadRequestf("could not load bearer token from request"), ""
 	}
 	dat, err := k.s.Storage.LoadAccess(bearer.Code)
 	if err != nil {
 		return err, ""
+	}
+	if dat == nil || dat.UserData == nil {
+		return errors.NotFoundf("unable to load bearer"), ""
 	}
 	if iri, err := assertToBytes(dat.UserData); err == nil {
 		it, err := k.l.Load(pub.IRI(iri))
