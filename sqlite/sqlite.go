@@ -374,7 +374,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 		data.Scope,
 		data.RedirectUri,
 		data.State,
-		data.CreatedAt.UTC(),
+		data.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if extra != nil {
 		q = saveAuthorize
@@ -421,8 +421,8 @@ func loadAuthorize(conn *sql.DB, code string) (*osin.AuthorizeData, error) {
 			a.Client, _ = getClient(conn, client)
 		}
 
-		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", createdAt)
-		if a.ExpireAt().Before(time.Now().UTC()) {
+		a.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+		if !a.CreatedAt.IsZero() && a.ExpireAt().Before(time.Now().UTC()) {
 			//s.errFn(logrus.Fields{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
@@ -506,7 +506,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 		data.ExpiresIn,
 		data.Scope,
 		data.RedirectUri,
-		data.CreatedAt.UTC(),
+		data.CreatedAt.UTC().Format(time.RFC3339Nano),
 		extra,
 	}
 
@@ -563,8 +563,8 @@ func loadAccess(conn *sql.DB, code string) (*osin.AccessData, error) {
 			a.AccessData, _ = loadAccess(conn, prev)
 		}
 
-		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", createdAt)
-		if a.ExpireAt().Before(time.Now().UTC()) {
+		a.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+		if !a.CreatedAt.IsZero() && a.ExpireAt().Before(time.Now().UTC()) {
 			//s.errFn(logrus.Fields{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
