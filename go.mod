@@ -6,6 +6,7 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
+	github.com/dgraph-io/badger/v3 v3.2011.1 // indirect
 	github.com/go-ap/activitypub v0.0.0-20210314184036-116119148da9
 	github.com/go-ap/client v0.0.0-20210314185705-ed4570272fa4
 	github.com/go-ap/errors v0.0.0-20210218123445-4466eca2f4ec
@@ -23,6 +24,12 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spacemonkeygo/httpsig v0.0.0-20181218213338-2605ae379e47
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899 // indirect
+	golang.org/x/mod v0.4.2 // indirect
+	golang.org/x/sys v0.0.0-20210317225723-c4fcb01b228e // indirect
 	golang.org/x/text v0.3.3 // indirect
-	modernc.org/sqlite v1.7.5
+	golang.org/x/tools v0.1.0 // indirect
+	honnef.co/go/netdb v0.0.0-20150201073656-a416d700ae39 // indirect
+	modernc.org/ccgo/v3 v3.9.1 // indirect
+	modernc.org/sqlite v1.10.0
+	modernc.org/strutil v1.1.1 // indirect
 )
