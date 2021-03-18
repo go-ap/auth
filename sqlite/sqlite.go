@@ -147,26 +147,25 @@ func Bootstrap(c Config, cl osin.Client) error {
 	os.RemoveAll(p)
 
 	s := New(c)
-	if err := s.Open(); err != nil {
+	if err = s.Open(); err != nil {
 		return err
 	}
 	defer s.Close()
-	if _, err := s.conn.Query(createClientTable); err != nil {
+	if _, err = s.conn.Query(createClientTable); err != nil {
 		return err
 	}
-	if _, err := s.conn.Query(createAuthorizeTable); err != nil {
+	if _, err = s.conn.Query(createAuthorizeTable); err != nil {
 		return err
 	}
-	if _, err := s.conn.Query(createAccessTable); err != nil {
+	if _, err = s.conn.Query(createAccessTable); err != nil {
 		return err
 	}
-	if _, err := s.conn.Query(createRefreshTable); err != nil {
+	if _, err = s.conn.Query(createRefreshTable); err != nil {
 		return err
 	}
-	if _, err := s.conn.Query(tuneQuery); err != nil {
+	if _, err = s.conn.Query(tuneQuery); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -182,8 +181,7 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
-	err := s.conn.Close()
-	if err != nil {
+	if err := s.conn.Close(); err != nil {
 		s.errFn(logrus.Fields{"err": err.Error()}, "unable to close sqlite db")
 	}
 	s.conn = nil
