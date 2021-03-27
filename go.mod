@@ -6,11 +6,11 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/dgraph-io/badger/v3 v3.2011.1 // indirect
-	github.com/go-ap/activitypub v0.0.0-20210326095623-6f428a28abcc
-	github.com/go-ap/client v0.0.0-20210326100233-f0ff19a7ad4c
+	github.com/dgraph-io/ristretto v0.0.4-0.20210122082011-bb5d392ed82d // indirect
+	github.com/go-ap/activitypub v0.0.0-20210327130624-57a41d04da41
+	github.com/go-ap/client v0.0.0-20210327130953-8cf21f285001
 	github.com/go-ap/errors v0.0.0-20210218123445-4466eca2f4ec
-	github.com/go-ap/storage v0.0.0-20210326095948-5565145b4d64
+	github.com/go-ap/storage v0.0.0-20210327130814-1122d1022afa
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/uuid v1.1.1 // indirect
@@ -19,16 +19,13 @@ require (
 	github.com/lib/pq v1.2.0 // indirect
 	github.com/openshift/osin v1.0.1
 	github.com/pborman/uuid v1.2.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spacemonkeygo/httpsig v0.0.0-20181218213338-2605ae379e47
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/sys v0.0.0-20210317225723-c4fcb01b228e // indirect
-	golang.org/x/text v0.3.3 // indirect
 	golang.org/x/tools v0.1.0 // indirect
-	honnef.co/go/netdb v0.0.0-20150201073656-a416d700ae39 // indirect
 	modernc.org/ccgo/v3 v3.9.1 // indirect
 	modernc.org/sqlite v1.10.0
 	modernc.org/strutil v1.1.1 // indirect
