@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net/http"
+	"strings"
+
 	pub "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
@@ -14,8 +17,6 @@ import (
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	"github.com/spacemonkeygo/httpsig"
-	"net/http"
-	"strings"
 )
 
 var AnonymousActor = pub.Actor{
