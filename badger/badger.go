@@ -186,7 +186,7 @@ func loadRawClient(c *osin.DefaultClient) func(raw []byte) error {
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
-		return nil, errors.NotFoundf("empty client id")
+		return nil, errors.NotFoundf("Empty client id")
 	}
 	if err := s.Open(); err != nil {
 		return nil, err
@@ -311,6 +311,9 @@ func loadRawAuthorize(a *osin.AuthorizeData) func(raw []byte) error {
 
 // LoadAuthorize
 func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty authorize code")
+	}
 	data := osin.AuthorizeData{}
 	err := s.Open()
 	if err != nil {
@@ -441,6 +444,9 @@ func (s stor) loadTxnAccess(a *osin.AccessData, token string) func(tx *badger.Tx
 
 // LoadAccess
 func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty access code")
+	}
 	err := s.Open()
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unable to open badger store")
@@ -490,6 +496,9 @@ func (s stor) refreshPath(refresh string) []byte {
 
 // LoadRefresh
 func (s *stor) LoadRefresh(token string) (*osin.AccessData, error) {
+	if token == "" {
+		return nil, errors.NotFoundf("Empty refresh token")
+	}
 	return nil, nil
 }
 

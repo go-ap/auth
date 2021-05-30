@@ -232,7 +232,7 @@ func (s *stor) loadClientFromPath(clientPath string) (osin.Client, error) {
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
-		return nil, errors.NotFoundf("empty client id")
+		return nil, errors.NotFoundf("Empty client id")
 	}
 	err := s.Open()
 	if err != nil {
@@ -387,6 +387,9 @@ func (s *stor) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData, erro
 
 // LoadAuthorize looks up AuthorizeData by a code.
 func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty authorize code")
+	}
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -523,6 +526,9 @@ func (s *stor) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
 
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty access code")
+	}
 	err := s.Open()
 	if err != nil {
 		return nil, err
@@ -544,6 +550,9 @@ func (s *stor) RemoveAccess(code string) error {
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty refresh code")
+	}
 	return nil, nil
 }
 

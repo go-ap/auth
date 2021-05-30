@@ -159,7 +159,7 @@ const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
-		return nil, errors.NotFoundf("empty client id")
+		return nil, errors.NotFoundf("Empty client id")
 	}
 	var cl cl
 	var c osin.DefaultClient
@@ -259,6 +259,9 @@ const loadAuthorize = "SELECT client, code, expires_in, scope, redirect_uri, sta
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
 func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty authorize code")
+	}
 	var data osin.AuthorizeData
 
 	var auth auth
@@ -363,6 +366,9 @@ const loadAccess = `SELECT client, authorize, previous, access_token, refresh_to
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty access code")
+	}
 	var result osin.AccessData
 
 	var acc acc
@@ -408,6 +414,9 @@ const loadRefresh = "SELECT access FROM refresh WHERE token=? LIMIT 1"
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty refresh code")
+	}
 	var ref ref
 	if err := s.conn.QueryRow(loadRefresh, code).Scan(&ref); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")

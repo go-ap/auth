@@ -183,7 +183,7 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
-		return nil, errors.NotFoundf("empty client id")
+		return nil, errors.NotFoundf("Empty client id")
 	}
 	c := osin.DefaultClient{}
 	err := s.Open()
@@ -313,6 +313,9 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
 func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty authorize code")
+	}
 	var data osin.AuthorizeData
 	err := s.Open()
 	if err != nil {
@@ -467,6 +470,9 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty access code")
+	}
 	var result osin.AccessData
 	err := s.Open()
 	if err != nil {
@@ -607,6 +613,9 @@ func (s *stor) RemoveAccess(code string) (err error) {
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty refresh code")
+	}
 	err := s.Open()
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unable to open boldtb")

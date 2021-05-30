@@ -251,7 +251,7 @@ func getClient(conn *sql.DB, id string) (osin.Client, error) {
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
-		return nil, errors.NotFoundf("empty client id")
+		return nil, errors.NotFoundf("Empty client id")
 	}
 	if err := s.Open(); err != nil {
 		return nil, err
@@ -435,6 +435,9 @@ func loadAuthorize(conn *sql.DB, code string) (*osin.AuthorizeData, error) {
 
 // LoadAuthorize looks up AuthorizeData by a code.
 func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty authorize code")
+	}
 	if err := s.Open(); err != nil {
 		return nil, err
 	}
@@ -576,6 +579,9 @@ func loadAccess(conn *sql.DB, code string) (*osin.AccessData, error) {
 
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty access code")
+	}
 	if err := s.Open(); err != nil {
 		return nil, err
 	}
@@ -605,6 +611,9 @@ const loadRefresh = "SELECT access_token FROM refresh WHERE token=? LIMIT 1"
 
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
+	if code == "" {
+		return nil, errors.NotFoundf("Empty refresh code")
+	}
 	if err := s.Open(); err != nil {
 		return nil, err
 	}
