@@ -250,6 +250,9 @@ func getClient(conn *sql.DB, id string) (osin.Client, error) {
 
 // GetClient
 func (s *stor) GetClient(id string) (osin.Client, error) {
+	if id == "" {
+		return nil, errors.NotFoundf("empty client id")
+	}
 	if err := s.Open(); err != nil {
 		return nil, err
 	}

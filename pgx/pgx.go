@@ -158,6 +158,9 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
+	if id == "" {
+		return nil, errors.NotFoundf("empty client id")
+	}
 	var cl cl
 	var c osin.DefaultClient
 	if err := s.conn.QueryRow(getClient, id).Scan(&cl); err == pgx.ErrNoRows {

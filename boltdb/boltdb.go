@@ -182,6 +182,9 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
+	if id == "" {
+		return nil, errors.NotFoundf("empty client id")
+	}
 	c := osin.DefaultClient{}
 	err := s.Open()
 	if err != nil {
