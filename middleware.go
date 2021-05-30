@@ -20,7 +20,7 @@ import (
 )
 
 var AnonymousActor = pub.Actor{
-	ID:   pub.ID(pub.PublicNS),
+	ID:   pub.PublicNS,
 	Type: pub.ActorType,
 	Name: pub.NaturalLanguageValues{
 		pub.LangRefValue{
@@ -123,7 +123,7 @@ func (k *keyLoader) GetKey(id string) interface{} {
 type oauthLoader struct {
 	logFn func(string, ...interface{})
 	acc   pub.Actor
-	s     *osin.Server
+	s     osin.Storage
 	l     st.ReadStore
 }
 
@@ -164,7 +164,7 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	if bearer == nil {
 		return errors.BadRequestf("could not load bearer token from request"), ""
 	}
-	dat, err := k.s.Storage.LoadAccess(bearer.Code)
+	dat, err := k.s.LoadAccess(bearer.Code)
 	if err != nil {
 		return err, ""
 	}
@@ -246,7 +246,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 		if strings.Contains(auth, "Bearer") {
 			// check OAuth2(plain) bearer if present
 			method = "oauth2"
-			v := oauthLoader{acc: acct, s: s.os, l: s.st}
+			v := oauthLoader{acc: acct, s: s.Server.Storage, l: s.st}
 			v.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
 				acct = v.acc

@@ -1,39 +1,23 @@
 package auth
 
 import (
-	"github.com/go-ap/auth/internal/log"
+	"github.com/go-ap/client"
+	"github.com/go-ap/storage"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
-func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
-	config := osin.ServerConfig{
-		AuthorizationExpiration:   86400,
-		AccessExpiration:          2678400,
-		TokenType:                 "Bearer",
-		AllowedAuthorizeTypes:     osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN},
-		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, /*osin.CLIENT_CREDENTIALS*/},
-		ErrorStatusCode:           http.StatusForbidden,
-		AllowClientSecretInParams: false,
-		AllowGetAccessRequest:     false,
-		RetainTokenAfterRefresh:   true,
-		RedirectUriSeparator:      "\n",
-		//RequirePKCEForPublicClients: true,
+func New(url string, os osin.Storage, st storage.ReadStore, l logrus.FieldLogger) (*Server, error) {
+	osin, err := NewServer(os, l)
+	if err != nil {
+		return nil, err
 	}
-	s := osin.NewServer(&config, store)
-
-	logFn := log.EmptyLogFn
-	errFn := log.EmptyLogFn
-	if l != nil {
-		logFn = func(ctx logrus.Fields, format string, v ...interface{}) {
-			l.WithFields(ctx).Infof(format, v...)
-		}
-		errFn = func(ctx logrus.Fields, format string, v ...interface{}) {
-			l.WithFields(ctx).Infof(format, v...)
-		}
-	}
-	var err error
-	s.Logger, err = log.New(log.LogFn(logFn), log.ErrFn(errFn))
-	return s, err
+	return &Server{
+		Server:  osin,
+		baseURL: url,
+		account: Account(AnonymousActor),
+		cl:      client.New(),
+		st:      st,
+		l:       l,
+	}, err
 }

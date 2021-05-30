@@ -2,10 +2,11 @@ package auth
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
 
@@ -22,7 +23,7 @@ func (s *Server) Redirect(w http.ResponseWriter, r *http.Request, url string, st
 
 
 func (s *Server) Authorize(w http.ResponseWriter, r *http.Request) {
-	os := s.os
+	os := s.Server
 
 	resp := os.NewResponse()
 	defer resp.Close()
@@ -40,7 +41,7 @@ func (s *Server) Authorize(w http.ResponseWriter, r *http.Request) {
 
 // Token
 func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
-	os := s.os
+	os := s.Server
 	resp := os.NewResponse()
 	defer resp.Close()
 
@@ -49,7 +50,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(who, &s.account); err == nil {
 				ar.Authorized = s.account.IsLogged()
 			} else {
-				s.l.Errorf("%os", err)
+				s.l.Errorf("%s", err)
 			}
 		}
 		os.FinishAccessRequest(resp, r, ar)
