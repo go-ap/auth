@@ -8,10 +8,10 @@ sources:
 environment:
   GO111MODULE: 'on'
 tasks:
-  - setup: |
-      cd auth && go mod download
   - tests: |
-      cd auth && make test
+      cd auth
+      go mod vendor
+      make test
   - coverage: |
       set -a +x
       cd auth && make coverage
