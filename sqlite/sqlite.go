@@ -5,19 +5,19 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"time"
+
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 	_ "modernc.org/sqlite"
-	"os"
-	"path"
-	"path/filepath"
-	"sync"
-	"time"
 )
 
-const defaultTimeout = 100 * time.Millisecond
+const defaultTimeout = 1000 * time.Millisecond
 
 // New returns a new filesystem storage instance.
 func New(c Config) *stor {
@@ -37,9 +37,7 @@ func New(c Config) *stor {
 }
 
 type stor struct {
-	path  string
-	mu     sync.Mutex
-	opened bool
+	path   string
 	conn   *sql.DB
 	logFn  log.LoggerFn
 	errFn  log.LoggerFn
@@ -96,7 +94,7 @@ const (
 
 	tuneQuery = `
 -- Use WAL mode (writers don't block readers):
-PRAGMA journal_mode = 'WAL'; -- this locks during testing
+PRAGMA journal_mode = 'TRUNCATE';
 -- Use memory as temporary storage:
 PRAGMA temp_store = 2;
 -- Faster synchronization that still keeps the data safe:
@@ -174,12 +172,8 @@ func Bootstrap(c Config, cl osin.Client) error {
 
 // Clone
 func (s *stor) Clone() osin.Storage {
-	// NOTICE(marius): osin, uses this before saving the Authorization data, and it fails if the database
-	// is not closed. This is why the tuneQuery journal_mode = WAL is needed.
 	s.Close()
-	defer time.Sleep(defaultTimeout)
-	ss := *s
-	return &ss
+	return s
 }
 
 // Close
@@ -187,12 +181,6 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
-	defer func() {
-		if s.opened {
-			s.mu.Unlock()
-			s.opened = false
-		}
-	}()
 	if err := s.conn.Close(); err != nil {
 		s.errFn(logrus.Fields{"err": err.Error()}, "unable to close sqlite db")
 	}
@@ -200,17 +188,9 @@ func (s *stor) Close() {
 }
 
 // Open
-func (s *stor) Open() error {
-	var err error
-
-	if !s.opened {
-		s.mu.Lock()
-		if s.conn, err = sql.Open("sqlite", s.path); err != nil {
-			return errors.Annotatef(err, "could not open sqlite connection")
-		}
-		s.opened = true
-	}
-	return nil
+func (s *stor) Open() (err error) {
+	s.conn, err = sql.Open("sqlite", s.path)
+	return err
 }
 
 const getClients = "SELECT code, secret, redirect_uri, extra FROM client;"
@@ -354,6 +334,9 @@ func (s *stor) CreateClient(c osin.Client) error {
 		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "Unable to save new client")
 	}
+	if err = tx.Commit(); err != nil {
+		return errors.Annotatef(err, "Unable to commit client save transaction")
+	}
 	return nil
 }
 
@@ -441,7 +424,6 @@ func loadAuthorize(conn *sql.Tx, code string) (*osin.AuthorizeData, error) {
 			return nil, errors.Annotatef(err, "unable to load authorize data")
 		}
 
-
 		a.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		if !a.CreatedAt.IsZero() && a.ExpireAt().Before(time.Now().UTC()) {
 			//s.errFn(logrus.Fields{"code": code}, err.Error())
@@ -495,7 +477,7 @@ func (s *stor) RemoveAuthorize(code string) error {
 const saveAccess = `INSERT INTO access (client, authorize, previous, token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-var WriteTxn = sql.TxOptions{ Isolation: sql.LevelWriteCommitted, ReadOnly:  false, }
+var WriteTxn = sql.TxOptions{Isolation: sql.LevelWriteCommitted, ReadOnly: false}
 
 // SaveAccess writes AccessData.
 func (s *stor) SaveAccess(data *osin.AccessData) error {
