@@ -140,7 +140,9 @@ func firstOrItem(it pub.Item) (pub.Item, error) {
 	return it, nil
 }
 
-func unauthorized(err error) error { return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token") }
+func unauthorized(err error) error {
+	return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token")
+}
 
 func assertToBytes(in interface{}) ([]byte, error) {
 	var ok bool

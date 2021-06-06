@@ -13,7 +13,7 @@ import (
 
 type Account pub.Actor
 
-func (a *Account) IsLogged () bool {
+func (a *Account) IsLogged() bool {
 	if a == nil {
 		return false
 	}
@@ -41,7 +41,7 @@ func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
 		AccessExpiration:          2678400,
 		TokenType:                 "Bearer",
 		AllowedAuthorizeTypes:     osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN, ID},
-		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, /*osin.CLIENT_CREDENTIALS*/},
+		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD /*osin.CLIENT_CREDENTIALS*/},
 		ErrorStatusCode:           http.StatusForbidden,
 		AllowClientSecretInParams: false,
 		AllowGetAccessRequest:     false,

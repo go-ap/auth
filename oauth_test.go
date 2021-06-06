@@ -9,4 +9,3 @@ func TestLogger_Printf(t *testing.T) {
 func TestNewOAuth2Server(t *testing.T) {
 	t.Skipf("TODO")
 }
-

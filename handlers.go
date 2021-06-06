@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-
 func (s *Server) Redirect(w http.ResponseWriter, r *http.Request, url string, status int) {
 	if err := s.saveSession(w, r); err != nil {
 		s.l.WithFields(logrus.Fields{
@@ -20,7 +19,6 @@ func (s *Server) Redirect(w http.ResponseWriter, r *http.Request, url string, st
 
 	http.Redirect(w, r, url, status)
 }
-
 
 func (s *Server) Authorize(w http.ResponseWriter, r *http.Request) {
 	os := s.Server
@@ -58,7 +56,7 @@ func (s *Server) Token(w http.ResponseWriter, r *http.Request) {
 	redirectOrOutput(resp, w, r, s)
 }
 
-func redirectOrOutput (rs *osin.Response, w http.ResponseWriter, r *http.Request, s *Server) {
+func redirectOrOutput(rs *osin.Response, w http.ResponseWriter, r *http.Request, s *Server) {
 	// Add headers
 	for i, k := range rs.Headers {
 		for _, v := range k {
