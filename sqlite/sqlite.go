@@ -94,7 +94,7 @@ const (
 
 	tuneQuery = `
 -- Use WAL mode (writers don't block readers):
-PRAGMA journal_mode = 'TRUNCATE';
+PRAGMA journal_mode = 'DELETE';
 -- Use memory as temporary storage:
 PRAGMA temp_store = 2;
 -- Faster synchronization that still keeps the data safe:
