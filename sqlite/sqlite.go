@@ -393,8 +393,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 		params = append(params, extra)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	if _, err = s.conn.ExecContext(ctx, q, params...); err != nil {
+	if _, err = s.conn.Exec(q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Unable to save authorize token")
 	}
