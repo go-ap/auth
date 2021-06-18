@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/go-ap/auth/internal/log"
@@ -26,6 +27,7 @@ func New(c Config) *stor {
 	s.path = p
 	s.logFn = log.EmptyLogFn
 	s.errFn = log.EmptyLogFn
+	s.s = sync.NewCond(new(sync.Mutex))
 
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -38,6 +40,7 @@ func New(c Config) *stor {
 
 type stor struct {
 	path   string
+	s      *sync.Cond
 	conn   *sql.DB
 	logFn  log.LoggerFn
 	errFn  log.LoggerFn
@@ -183,6 +186,9 @@ func (s *stor) Close() {
 	if s.conn == nil {
 		return
 	}
+	defer func() {
+		s.s.L.Unlock()
+	}()
 	if err := s.conn.Close(); err != nil {
 		s.errFn(logrus.Fields{"err": err.Error()}, "unable to close sqlite db")
 	}
@@ -191,8 +197,14 @@ func (s *stor) Close() {
 
 // Open
 func (s *stor) Open() (err error) {
-	s.conn, err = sql.Open("sqlite", s.path)
-	return err
+	for s.conn != nil {
+		s.s.Wait()
+	}
+	if s.conn, err = sql.Open("sqlite", s.path); err != nil {
+		return errors.Annotatef(err, "could not open sqlite connection")
+	}
+	s.s.L.Lock()
+	return
 }
 
 const getClients = "SELECT code, secret, redirect_uri, extra FROM client;"
@@ -395,6 +407,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 		params = append(params, extra)
 	}
 
+	//ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err = s.conn.Exec(q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Unable to save authorize token")
