@@ -178,7 +178,7 @@ func (s *stor) Clone() osin.Storage {
 	// NOTICE(marius): osin, uses this before saving the Authorization data, and it fails if the database
 	// is not closed. This is why the tuneQuery journal_mode = WAL is needed.
 	s.Close()
-	return New(Config{Path: s.path, LogFn: s.logFn, ErrFn: s.errFn})
+	return New(Config{Path: path.Dir(s.path), LogFn: s.logFn, ErrFn: s.errFn})
 }
 
 // Close
