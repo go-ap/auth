@@ -97,7 +97,7 @@ const (
 
 	tuneQuery = `
 -- Use WAL mode (writers don't block readers):
-PRAGMA journal_mode = 'DELETE';
+PRAGMA journal_mode = DELETE;
 -- Use memory as temporary storage:
 PRAGMA temp_store = 2;
 -- Faster synchronization that still keeps the data safe:
@@ -235,9 +235,9 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 
 const getClientSQL = "SELECT code, secret, redirect_uri, extra FROM client WHERE code=?;"
 
-func getClient(conn *sql.Tx, id string) (osin.Client, error) {
+func getClient(conn *sql.DB, ctx context.Context, id string) (osin.Client, error) {
 	var c *osin.DefaultClient
-	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+
 	rows, err := conn.QueryContext(ctx, getClientSQL, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -266,12 +266,11 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 		return nil, err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &ReadOnlyTxn)
-	if err != nil {
-		return nil, err
-	}
-	return getClient(tx, id)
+
+
+	return getClient(s.conn, ctx, id)
 }
 
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?, ?, ?) WHERE code=?"
@@ -302,6 +301,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 		q = updateClient
 		params = append(params, interface{}(data))
 	}
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
@@ -340,16 +340,9 @@ func (s *stor) CreateClient(c osin.Client) error {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &WriteTxn)
-	if err != nil {
-		return err
-	}
-	if _, err = tx.Exec(q, params...); err != nil {
+	if _, err = s.conn.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "Unable to save new client")
-	}
-	if err = tx.Commit(); err != nil {
-		return errors.Annotatef(err, "Unable to commit client save transaction")
 	}
 	return nil
 }
@@ -362,6 +355,7 @@ func (s *stor) RemoveClient(id string) error {
 		return err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, removeClient, id); err != nil {
 		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
@@ -407,8 +401,8 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 		params = append(params, extra)
 	}
 
-	//ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	if _, err = s.conn.Exec(q, params...); err != nil {
+	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	if _, err = s.conn.ExecContext(ctx, q, params...); err != nil {
 		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Unable to save authorize token")
 	}
@@ -417,10 +411,9 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 
 const loadAuthorizeSQL = "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
 
-func loadAuthorize(conn *sql.Tx, code string) (*osin.AuthorizeData, error) {
+func loadAuthorize(conn *sql.DB, ctx context.Context, code string) (*osin.AuthorizeData, error) {
 	var a *osin.AuthorizeData
 
-	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	rows, err := conn.QueryContext(ctx, loadAuthorizeSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NotFoundf("Unable to load authorize token")
@@ -447,11 +440,10 @@ func loadAuthorize(conn *sql.Tx, code string) (*osin.AuthorizeData, error) {
 	}
 
 	if len(client) > 0 {
-		a.Client, _ = getClient(conn, client)
+		a.Client, _ = getClient(conn, ctx, client)
 	}
 
 	return a, nil
-
 }
 
 // LoadAuthorize looks up AuthorizeData by a code.
@@ -463,12 +455,9 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 		return nil, err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &ReadOnlyTxn)
-	if err != nil {
-		return nil, err
-	}
-	return loadAuthorize(tx, code)
+	return loadAuthorize(s.conn, ctx, code)
 }
 
 const removeAuthorize = "DELETE FROM authorize WHERE code=?"
@@ -479,6 +468,7 @@ func (s *stor) RemoveAuthorize(code string) error {
 		return err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, removeAuthorize, code); err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
@@ -516,19 +506,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	}
 	defer s.Close()
 
-	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &WriteTxn)
-	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
-		return errors.Annotatef(err, "Unable to start transaction to save access token")
-	}
-
-	if data.RefreshToken != "" {
-		if err := s.saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
-			return err
-		}
-	}
+	ctx, _ := context.WithTimeout(context.TODO(), defaultTimeout)
 	params := []interface{}{
 		data.Client.GetId(),
 		authorizeData.Code,
@@ -546,19 +524,16 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 		return errors.Newf("data.Client must not be nil")
 	}
 
-	_, err = tx.Exec(saveAccess, params...)
+	_, err = s.conn.ExecContext(ctx, saveAccess, params...)
 	if err != nil {
-		if rbe := tx.Rollback(); rbe != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId()}, rbe.Error())
-			return errors.Annotatef(rbe, "Unable to rollback access create transaction")
-		}
 		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Unable to create access token")
 	}
-
-	if err = tx.Commit(); err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
-		return errors.Annotatef(err, "Unable to commit access create transaction")
+	if len(data.RefreshToken) > 0 {
+		if err = s.saveRefresh(ctx, data.RefreshToken, data.AccessToken); err != nil {
+			s.errFn(logrus.Fields{"id": data.Client.GetId(), "err": err.Error()}, "unable to save refresh token")
+			return err
+		}
 	}
 
 	return nil
@@ -567,9 +542,8 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 const loadAccessSQL = `SELECT client, authorize, previous, token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
 	FROM access WHERE token=? LIMIT 1`
 
-func loadAccess(conn *sql.Tx, code string) (*osin.AccessData, error) {
+func loadAccess(conn *sql.DB, ctx context.Context, code string) (*osin.AccessData, error) {
 	var a *osin.AccessData
-	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	rows, err := conn.QueryContext(ctx, loadAccessSQL, code)
 	if err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "Unable to load access token")
@@ -594,13 +568,13 @@ func loadAccess(conn *sql.Tx, code string) (*osin.AccessData, error) {
 	}
 
 	if len(client) > 0 {
-		a.Client, _ = getClient(conn, client)
+		a.Client, _ = getClient(conn, ctx, client)
 	}
 	if len(authorize) > 0 {
-		a.AuthorizeData, _ = loadAuthorize(conn, authorize)
+		a.AuthorizeData, _ = loadAuthorize(conn, ctx, authorize)
 	}
 	if len(prev) > 0 {
-		a.AccessData, _ = loadAccess(conn, prev)
+		a.AccessData, _ = loadAccess(conn, ctx, prev)
 	}
 
 	return a, nil
@@ -620,12 +594,9 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 		return nil, err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &ReadOnlyTxn)
-	if err != nil {
-		return nil, err
-	}
-	return loadAccess(tx, code)
+	return loadAccess(s.conn, ctx, code)
 }
 
 const removeAccess = "DELETE FROM access WHERE token=?"
@@ -636,6 +607,7 @@ func (s *stor) RemoveAccess(code string) error {
 		return err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	_, err := s.conn.ExecContext(ctx, removeAccess, code)
 	if err != nil {
@@ -657,19 +629,16 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 		return nil, err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	tx, err := s.conn.BeginTx(ctx, &ReadOnlyTxn)
-	if err != nil {
-		return nil, err
-	}
 	var access string
-	if err := tx.QueryRowContext(ctx, loadRefresh, code).Scan(access); err == sql.ErrNoRows {
+	if err := s.conn.QueryRowContext(ctx, loadRefresh, code).Scan(access); err == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "Unable to load refresh token")
 	} else if err != nil {
 		return nil, errors.Annotatef(err, "Unable to load refresh token")
 	}
 
-	return loadAccess(tx, access)
+	return loadAccess(s.conn, ctx, access)
 }
 
 const removeRefresh = "DELETE FROM refresh WHERE token=?"
@@ -680,7 +649,9 @@ func (s *stor) RemoveRefresh(code string) error {
 		return err
 	}
 	defer s.Close()
+
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
+
 	_, err := s.conn.ExecContext(ctx, removeRefresh, code)
 	if err != nil {
 		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
@@ -692,13 +663,8 @@ func (s *stor) RemoveRefresh(code string) error {
 
 const saveRefresh = "INSERT INTO refresh (token, access_token) VALUES (?, ?)"
 
-func (s *stor) saveRefresh(tx *sql.Tx, refresh, access string) (err error) {
-	_, err = tx.Exec(saveRefresh, refresh, access)
-	if err != nil {
-		if rbe := tx.Rollback(); rbe != nil {
-			s.errFn(logrus.Fields{"code": access, "table": "refresh", "operation": "insert"}, rbe.Error())
-			return errors.Annotatef(rbe, "Unable to rollback refresh token save")
-		}
+func (s *stor) saveRefresh(ctx context.Context, refresh, access string) (err error) {
+	if _, err = s.conn.ExecContext(ctx, saveRefresh, refresh, access); err != nil {
 		return errors.Annotatef(err, "Unable to save refresh token")
 	}
 	return nil
