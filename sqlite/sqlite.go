@@ -201,6 +201,11 @@ const getClients = "SELECT code, secret, redirect_uri, extra FROM client;"
 
 // ListClients
 func (s *stor) ListClients() ([]osin.Client, error) {
+	if err := s.Open(); err != nil {
+		return nil, err
+	}
+	defer s.Close()
+
 	result := make([]osin.Client, 0)
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
