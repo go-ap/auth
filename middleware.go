@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -53,8 +52,8 @@ func loadFederatedActor(c client.Basic, id pub.IRI) (pub.Actor, error) {
 	return AnonymousActor, nil
 }
 
-func validateLocalIRI(i pub.IRI) error {
-	if strings.Contains(i.String(), "Config.BaseURL") {
+func (k keyLoader) validateLocalIRI(i pub.IRI) error {
+	if i.Contains(pub.IRI(k.baseIRI), true) {
 		return nil
 	}
 	return errors.Newf("%s is not a local IRI", i)
@@ -74,20 +73,13 @@ func (k *keyLoader) GetKey(id string) interface{} {
 		return nil
 	}
 
-	if err := validateLocalIRI(iri); err == nil {
+	if err := k.validateLocalIRI(iri); err == nil {
 		ob, err := k.l.Load(iri)
 		if err != nil || pub.IsNil(ob) {
 			k.logFn("unable to find local account matching key id %s", iri)
 			return nil
 		}
-		var actor pub.Item
-		if ob.IsCollection() {
-			pub.OnCollectionIntf(ob, func(col pub.CollectionInterface) error {
-				actor = col.Collection().First()
-				return nil
-			})
-		}
-		pub.OnActor(actor, func(a *pub.Actor) error {
+		pub.OnActor(ob, func(a *pub.Actor) error {
 			k.acc = *a
 			return nil
 		})
@@ -100,19 +92,12 @@ func (k *keyLoader) GetKey(id string) interface{} {
 		}
 	}
 
-	obj, err := pub.ToActor(k.acc)
-	if err != nil {
-		k.logFn("unable to load actor %s", err)
-		return nil
-	}
-	var pub crypto.PublicKey
-	rawPem := obj.PublicKey.PublicKeyPem
-	block, _ := pem.Decode([]byte(rawPem))
+	block, _ := pem.Decode([]byte(k.acc.PublicKey.PublicKeyPem))
 	if block == nil {
 		k.logFn("failed to parse PEM block containing the public key")
 		return nil
 	}
-	pub, err = x509.ParsePKIXPublicKey(block.Bytes)
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		k.logFn("x509 error %s", err)
 		return nil
@@ -256,7 +241,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 		}
 		if strings.Contains(auth, "Signature") {
 			// verify http-signature if present
-			getter := keyLoader{acc: acct, l: s.st, realm: r.URL.Host, c: s.cl}
+			getter := keyLoader{acc: acct, l: s.st, realm: s.baseURL, baseIRI: s.baseURL, c: s.cl}
 			method = "httpSig"
 			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 
