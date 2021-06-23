@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dgraph-io/badger/v2"
-	"github.com/openshift/osin"
 	"math/rand"
 	"os"
 	"path"
 	"reflect"
 	"testing"
+
+	"github.com/dgraph-io/badger/v3"
+	"github.com/openshift/osin"
 )
 
 var (

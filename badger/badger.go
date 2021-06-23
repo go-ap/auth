@@ -2,17 +2,18 @@ package badger
 
 import (
 	"encoding/json"
-	"github.com/dgraph-io/badger/v2"
-	"github.com/go-ap/auth/internal/log"
-	"github.com/go-ap/errors"
-	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/v3"
+	"github.com/go-ap/auth/internal/log"
+	"github.com/go-ap/errors"
+	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 )
 
 const (
