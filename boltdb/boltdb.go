@@ -3,12 +3,13 @@ package boltdb
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/boltdb/bolt"
+	"time"
+
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"time"
+	bolt "go.etcd.io/bbolt"
 )
 
 const (
