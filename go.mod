@@ -26,7 +26,7 @@ require (
 	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
 	github.com/sirupsen/logrus v1.6.0
-	github.com/spacemonkeygo/httpsig v0.0.0-20181218213338-2605ae379e47
+	github.com/zaibon/httpsig v0.0.0-20210219100301-931cc471f406
 	go.etcd.io/bbolt v1.3.6
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect

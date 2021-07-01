@@ -15,7 +15,7 @@ import (
 	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"github.com/spacemonkeygo/httpsig"
+	"github.com/zaibon/httpsig"
 )
 
 var AnonymousActor = pub.Actor{
@@ -32,24 +32,9 @@ var AnonymousActor = pub.Actor{
 type keyLoader struct {
 	baseIRI string
 	logFn   func(string, ...interface{})
-	realm   string
 	acc     pub.Actor
 	l       st.ReadStore
 	c       client.Basic
-}
-
-func loadFederatedActor(c client.Basic, id pub.IRI) (pub.Actor, error) {
-	it, err := c.LoadIRI(id)
-	if err != nil {
-		return AnonymousActor, err
-	}
-	if acct, ok := it.(*pub.Actor); ok {
-		return *acct, nil
-	}
-	if acct, ok := it.(pub.Actor); ok {
-		return acct, nil
-	}
-	return AnonymousActor, nil
 }
 
 func (k keyLoader) validateLocalIRI(i pub.IRI) error {
@@ -59,50 +44,40 @@ func (k keyLoader) validateLocalIRI(i pub.IRI) error {
 	return errors.Newf("%s is not a local IRI", i)
 }
 
-func (k *keyLoader) GetKey(id string) interface{} {
+func (k *keyLoader) GetKey(id string) (interface{}, error) {
 	var err error
 
 	iri := pub.IRI(id)
 	u, err := iri.URL()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if u.Fragment != "main-key" {
 		// invalid generated public key id
-		k.logFn("missing key")
-		return nil
+		return nil, errors.Newf("missing key")
 	}
 
-	if err := k.validateLocalIRI(iri); err == nil {
-		ob, err := k.l.Load(iri)
-		if err != nil || pub.IsNil(ob) {
-			k.logFn("unable to find local account matching key id %s", iri)
-			return nil
-		}
-		pub.OnActor(ob, func(a *pub.Actor) error {
-			k.acc = *a
-			return nil
-		})
-	} else {
-		// @todo(queue_support): this needs to be moved to using queues
-		k.acc, err = loadFederatedActor(k.c, iri)
-		if err != nil {
-			k.logFn("unable to load federated account matching key id %s", iri)
-			return nil
-		}
+	ob, err := k.l.Load(iri)
+	if err != nil || pub.IsNil(ob) {
+		return nil, errors.Newf("unable to find local account matching key id %s", iri)
+	}
+	err = pub.OnActor(ob, func(a *pub.Actor) error {
+		k.acc = *a
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	block, _ := pem.Decode([]byte(k.acc.PublicKey.PublicKeyPem))
 	if block == nil {
-		k.logFn("failed to parse PEM block containing the public key")
-		return nil
+		return nil, errors.Newf("failed to parse PEM block containing the public key")
 	}
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		k.logFn("x509 error %s", err)
-		return nil
+		return nil, errors.Annotatef(err, "x509 error")
 	}
-	return pub
+	return pub, nil
 }
 
 type oauthLoader struct {
@@ -187,8 +162,8 @@ func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
 	v.SetRequiredHeaders([]string{"(request-target)", "host", "date"})
 
 	var challengeParams []string
-	if getter.realm != "" {
-		challengeParams = append(challengeParams, fmt.Sprintf("realm=%q", getter.realm))
+	if getter.baseIRI != "" {
+		challengeParams = append(challengeParams, fmt.Sprintf("realm=%q", getter.baseIRI))
 	}
 	if headers := v.RequiredHeaders(); len(headers) > 0 {
 		challengeParams = append(challengeParams, fmt.Sprintf("headers=%q", strings.Join(headers, " ")))
@@ -241,13 +216,13 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 		}
 		if strings.Contains(auth, "Signature") {
 			// verify http-signature if present
-			getter := keyLoader{acc: acct, l: s.st, realm: s.baseURL, baseIRI: s.baseURL, c: s.cl}
+			getter := keyLoader{acc: acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
 			method = "httpSig"
 			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
 
 			var v *httpsig.Verifier
 			v, challenge = httpSignatureVerifier(&getter)
-			if err = v.Verify(r); err == nil {
+			if _, err = v.Verify(r); err == nil {
 				acct = getter.acc
 			}
 		}
