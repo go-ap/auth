@@ -10,6 +10,7 @@ require (
 	github.com/go-ap/activitypub v0.0.0-20210623143448-f56d3bfa453f
 	github.com/go-ap/client v0.0.0-20210623152428-5af926aef986
 	github.com/go-ap/errors v0.0.0-20210527074045-78cc5b9dcc94
+	github.com/go-ap/httpsig v0.0.0-20210701073735-ee6f491a954c
 	github.com/go-ap/storage v0.0.0-20210623152225-7270c1fd3fa7
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
@@ -26,7 +27,6 @@ require (
 	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
 	github.com/sirupsen/logrus v1.6.0
-	github.com/zaibon/httpsig v0.0.0-20210219100301-931cc471f406
 	go.etcd.io/bbolt v1.3.6
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect

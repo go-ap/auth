@@ -12,10 +12,10 @@ import (
 	pub "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
+	"github.com/go-ap/httpsig"
 	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"github.com/zaibon/httpsig"
 )
 
 var AnonymousActor = pub.Actor{
@@ -45,15 +45,12 @@ func (k keyLoader) validateLocalIRI(i pub.IRI) error {
 }
 
 func (k *keyLoader) GetKey(id string) (interface{}, error) {
-	var err error
-
 	iri := pub.IRI(id)
 	u, err := iri.URL()
 	if err != nil {
 		return nil, err
 	}
 	if u.Fragment != "main-key" {
-		// invalid generated public key id
 		return nil, errors.Newf("missing key")
 	}
 
@@ -73,11 +70,7 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 	if block == nil {
 		return nil, errors.Newf("failed to parse PEM block containing the public key")
 	}
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, errors.Annotatef(err, "x509 error")
-	}
-	return pub, nil
+	return x509.ParsePKIXPublicKey(block.Bytes)
 }
 
 type oauthLoader struct {
