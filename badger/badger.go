@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -65,7 +64,6 @@ func interfaceIsNil(c interface{}) bool {
 
 type stor struct {
 	d     *badger.DB
-	m     sync.Mutex
 	path  string
 	host  string
 	logFn log.LoggerFn
@@ -102,12 +100,11 @@ func New(c Config) *stor {
 		if err := mkDirIfNotExists(fullPath); err != nil {
 			return nil
 		}
-		c.Path = path.Join(fullPath, folder)
+		c.Path = fullPath
 	}
 	b := stor{
 		path:  c.Path,
 		host:  c.Host,
-		m:     sync.Mutex{},
 		logFn: log.EmptyLogFn,
 		errFn: log.EmptyLogFn,
 	}
@@ -123,12 +120,12 @@ func New(c Config) *stor {
 
 // Open opens the badger database if possible.
 func (s *stor) Open() error {
-	s.m.Lock()
 	var err error
 	c := badger.DefaultOptions(s.path).WithLogger(s.l)
 	if s.path == "" {
 		c.InMemory = true
 	}
+	c.MetricsEnabled = false
 	s.d, err = badger.Open(c)
 	if err != nil {
 		err = errors.Annotatef(err, "unable to open storage")
@@ -142,7 +139,6 @@ func (s *stor) Close() {
 		return
 	}
 	s.d.Close()
-	s.m.Unlock()
 }
 
 // Clone
