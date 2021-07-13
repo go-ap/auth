@@ -222,10 +222,12 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
 	}
 	if err == nil {
 		// TODO(marius): Add actor's host to the logging
-		s.l.WithFields(logrus.Fields{
-			"auth": method,
-			"id":   acct.GetID(),
-		}).Debug("loaded account from Authorization header")
+		if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
+			s.l.WithFields(logrus.Fields{
+				"auth": method,
+				"id":   acct.GetID(),
+			}).Debug("loaded account from Authorization header")
+		}
 		return acct, nil
 	}
 	// TODO(marius): fix this challenge passing
