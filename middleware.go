@@ -54,7 +54,12 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 		return nil, errors.Newf("missing key")
 	}
 
-	ob, err := k.l.Load(iri)
+	var ob pub.Item
+	if iri.Contains(pub.IRI(k.baseIRI), true); err != nil {
+		ob, err = k.l.Load(iri)
+	} else {
+		ob, err = k.c.LoadIRI(iri)
+	}
 	if err != nil || pub.IsNil(ob) {
 		return nil, errors.Newf("unable to find local account matching key id %s", iri)
 	}
