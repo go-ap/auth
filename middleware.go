@@ -55,13 +55,17 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 	}
 
 	var ob pub.Item
-	if iri.Contains(pub.IRI(k.baseIRI), true); err != nil {
-		ob, err = k.l.Load(iri)
-	} else {
-		ob, err = k.c.LoadIRI(iri)
+	var loadFn func(pub.IRI) (pub.Item, error) = k.l.Load
+
+	if !iri.Contains(pub.IRI(k.baseIRI), true) {
+		loadFn = k.c.LoadIRI
 	}
-	if err != nil || pub.IsNil(ob) {
-		return nil, errors.Newf("unable to find local account matching key id %s", iri)
+
+	if ob, err = loadFn(iri); err != nil {
+		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
+	}
+	if pub.IsNil(ob) {
+		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
 	err = pub.OnActor(ob, func(a *pub.Actor) error {
 		k.acc = *a
