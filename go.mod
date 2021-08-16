@@ -7,11 +7,11 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.0
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
-	github.com/go-ap/activitypub v0.0.0-20210815171118-06ac3605b817
-	github.com/go-ap/client v0.0.0-20210815171859-991616ee1205
+	github.com/go-ap/activitypub v0.0.0-20210816142843-94c953e3917c
+	github.com/go-ap/client v0.0.0-20210816143048-7da1cd400ef0
 	github.com/go-ap/errors v0.0.0-20210814172742-e0897299dceb
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
-	github.com/go-ap/storage v0.0.0-20210815171730-de6aee261afe
+	github.com/go-ap/storage v0.0.0-20210816142936-ad0ec78d4733
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
