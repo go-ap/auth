@@ -8,8 +8,8 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.0
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/go-ap/activitypub v0.0.0-20211112190508-c1e48c1eef48
-	github.com/go-ap/client v0.0.0-20211205142001-1cc105d48c7c
-	github.com/go-ap/errors v0.0.0-20211205141754-a95f7000cba8
+	github.com/go-ap/client v0.0.0-20211205144204-87f14c68979b
+	github.com/go-ap/errors v0.0.0-20211205144020-607e3e4f0191
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-ap/storage v0.0.0-20211205141250-cc2d730a9cfb
 	github.com/go-chi/chi v4.1.2+incompatible
