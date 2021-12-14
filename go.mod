@@ -7,7 +7,8 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/go-ap/activitypub v0.0.0-20211112190508-c1e48c1eef48
 	github.com/go-ap/client v0.0.0-20211205144204-87f14c68979b
-	github.com/go-ap/errors v0.0.0-20211205144020-607e3e4f0191
+	github.com/go-ap/errors v0.0.0-20211205144917-1b5bb9681d99
+	github.com/go-ap/handlers v0.0.0-20211214113238-fbdf36704e6a // indirect
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-ap/storage v0.0.0-20211205141250-cc2d730a9cfb
 	github.com/go-chi/chi v4.1.2+incompatible
