@@ -5,11 +5,11 @@ go 1.13
 require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20211112192149-67a86322d89b
-	github.com/go-ap/client v0.0.0-20211229113150-483ab43a8d7d
+	github.com/go-ap/activitypub v0.0.0-20211230184925-f00af9750d0b
+	github.com/go-ap/client v0.0.0-20211230185137-fe6138886bc0
 	github.com/go-ap/errors v0.0.0-20211205144917-1b5bb9681d99
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
-	github.com/go-ap/storage v0.0.0-20211229112954-4c9e4d11e3d2
+	github.com/go-ap/storage v0.0.0-20211230185031-929aadaa8362
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
