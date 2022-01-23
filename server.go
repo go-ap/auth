@@ -32,7 +32,7 @@ type Server struct {
 	l       logrus.FieldLogger
 }
 
-// ID is the authorize type that IndieAuth is using
+// ID is the type of authorization that IndieAuth is using
 const ID = osin.AuthorizeRequestType("id")
 
 func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
