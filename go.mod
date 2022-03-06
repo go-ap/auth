@@ -6,11 +6,11 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20220301152214-16bd1c8aa0b3
-	github.com/go-ap/client v0.0.0-20220301152450-ecde1e987b19
+	github.com/go-ap/activitypub v0.0.0-20220306123418-d29b4fa0aeb9
+	github.com/go-ap/client v0.0.0-20220306125322-7e5a022f9f17
 	github.com/go-ap/errors v0.0.0-20211205144917-1b5bb9681d99
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
-	github.com/go-ap/storage v0.0.0-20220301152322-b3a5743b1b6f
+	github.com/go-ap/storage v0.0.0-20220306123718-7b3113a02b59
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/golang/glog v1.0.0 // indirect
@@ -36,5 +36,4 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/sqlite v1.14.8
-	modernc.org/strutil v1.1.1 // indirect
 )
