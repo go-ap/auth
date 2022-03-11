@@ -31,9 +31,10 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
+	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
 	golang.org/x/tools v0.1.9 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
+	modernc.org/libc v1.14.9 // indirect
 	modernc.org/sqlite v1.14.8
 )
