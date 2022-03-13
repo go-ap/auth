@@ -6,11 +6,11 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20220311154756-eed05617790c
-	github.com/go-ap/client v0.0.0-20220312084440-f4072521af31
+	github.com/go-ap/activitypub v0.0.0-20220313102530-8eefc7992f87
+	github.com/go-ap/client v0.0.0-20220313103000-29bb8eadf587
 	github.com/go-ap/errors v0.0.0-20211205144917-1b5bb9681d99
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
-	github.com/go-ap/storage v0.0.0-20220311154839-1a0ccdeeb25a
+	github.com/go-ap/storage v0.0.0-20220313102613-ca908916b62e
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/golang/glog v1.0.0 // indirect
