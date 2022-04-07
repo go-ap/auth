@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/go-ap/activitypub v0.0.0-20220323151940-947bcada60f7
-	github.com/go-ap/client v0.0.0-20220323152300-c3a9528522de
-	github.com/go-ap/errors v0.0.0-20211205144917-1b5bb9681d99
+	github.com/go-ap/client v0.0.0-20220407124711-524feff013fe
+	github.com/go-ap/errors v0.0.0-20220407124202-394efeb1ec53
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-ap/storage v0.0.0-20220323152147-7b1ff73eb5c1
 	github.com/go-chi/chi v4.1.2+incompatible
@@ -24,7 +24,7 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
-	github.com/go-ap/handlers v0.0.0-20220323152234-bd24563ded0c // indirect
+	github.com/go-ap/handlers v0.0.0-20220407124418-bc648cfc459b // indirect
 	github.com/go-ap/jsonld v0.0.0-20200327122108-fafac2de2660 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -47,7 +47,7 @@ require (
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/valyala/fastjson v1.6.3 // indirect
 	go.opencensus.io v0.22.5 // indirect
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
+	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
