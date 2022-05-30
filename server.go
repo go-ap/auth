@@ -4,7 +4,6 @@ import (
 	pub "github.com/go-ap/activitypub"
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/client"
-	"github.com/go-ap/storage"
 	"github.com/go-chi/chi"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
@@ -28,7 +27,7 @@ type Server struct {
 	baseURL string
 	account Account
 	cl      client.Basic
-	st      storage.ReadStore
+	st      ReadStore
 	l       logrus.FieldLogger
 }
 
