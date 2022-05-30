@@ -4,11 +4,10 @@ go 1.18
 
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20220529131953-897ab70990db
-	github.com/go-ap/client v0.0.0-20220529132740-811964b0313e
+	github.com/go-ap/activitypub v0.0.0-20220530124813-495ce2ea6660
+	github.com/go-ap/client v0.0.0-20220530125359-8bbea236a927
 	github.com/go-ap/errors v0.0.0-20220529131844-4c7dbeabb369
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
-	github.com/go-ap/storage v0.0.0-20220529132413-43d0dcf851c6
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/openshift/osin v1.0.1
@@ -44,7 +43,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
-	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/valyala/fastjson v1.6.3 // indirect
 	go.opencensus.io v0.22.5 // indirect
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect

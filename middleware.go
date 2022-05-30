@@ -13,7 +13,6 @@ import (
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/httpsig"
-	st "github.com/go-ap/storage"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
 )
@@ -29,11 +28,17 @@ var AnonymousActor = pub.Actor{
 	},
 }
 
+// ReadStore
+type ReadStore interface {
+	// Load returns an Item or an ItemCollection from an IRI
+	Load(pub.IRI) (pub.Item, error)
+}
+
 type keyLoader struct {
 	baseIRI string
 	logFn   func(string, ...interface{})
 	acc     pub.Actor
-	l       st.ReadStore
+	l       ReadStore
 	c       client.Basic
 }
 
@@ -86,7 +91,7 @@ type oauthLoader struct {
 	logFn func(string, ...interface{})
 	acc   pub.Actor
 	s     osin.Storage
-	l     st.ReadStore
+	l     ReadStore
 }
 
 func firstOrItem(it pub.Item) (pub.Item, error) {
