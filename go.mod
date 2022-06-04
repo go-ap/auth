@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20220530124813-495ce2ea6660
-	github.com/go-ap/client v0.0.0-20220530144553-cf78a2abf269
+	github.com/go-ap/activitypub v0.0.0-20220603125744-07cf4a27c1fb
+	github.com/go-ap/client v0.0.0-20220604130503-9eec19e2ca60
 	github.com/go-ap/errors v0.0.0-20220529131844-4c7dbeabb369
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-chi/chi v4.1.2+incompatible
