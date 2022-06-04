@@ -1,22 +1,23 @@
 package auth
 
 import (
-	pub "github.com/go-ap/activitypub"
+	"net/http"
+
+	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/client"
 	"github.com/go-chi/chi"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
-type Account pub.Actor
+type Account vocab.Actor
 
 func (a *Account) IsLogged() bool {
 	if a == nil {
 		return false
 	}
-	if a.ID == pub.PublicNS {
+	if a.ID == vocab.PublicNS {
 		return false
 	}
 	return true

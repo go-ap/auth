@@ -3,12 +3,13 @@ package pgx
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/errors"
 	"github.com/jackc/pgx"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 type cl struct {
@@ -128,6 +129,7 @@ func (s *stor) Open() error {
 }
 
 const getClients = "SELECT id, secret, redirect_uri, extra FROM client;"
+
 // ListClients
 func (s *stor) ListClients() ([]osin.Client, error) {
 	result := make([]osin.Client, 0)
@@ -156,6 +158,7 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 }
 
 const getClient = "SELECT id, secret, redirect_uri, extra FROM client WHERE id=?"
+
 // GetClient loads the client by id
 func (s *stor) GetClient(id string) (osin.Client, error) {
 	if id == "" {
@@ -178,6 +181,7 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 }
 
 const updateClient = "UPDATE client SET (secret, redirect_uri, extra) = (?2, ?3, ?4) WHERE id=?1"
+
 // UpdateClient updates the client (identified by it's id) and replaces the values with the values of client.
 func (s *stor) UpdateClient(c osin.Client) error {
 	if c == nil {
@@ -197,6 +201,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 }
 
 const createClient = "INSERT INTO client (id, secret, redirect_uri, extra) VALUES (?0, ?1, ?2, ?3)"
+
 // CreateClient stores the client in the database and returns an error, if something went wrong.
 func (s *stor) CreateClient(c osin.Client) error {
 	if c == nil {
@@ -216,6 +221,7 @@ func (s *stor) CreateClient(c osin.Client) error {
 }
 
 const removeClient = "DELETE FROM client WHERE id=?"
+
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
 func (s *stor) RemoveClient(id string) error {
 	if _, err := s.conn.Exec(removeClient, id); err != nil {
@@ -228,6 +234,7 @@ func (s *stor) RemoveClient(id string) error {
 
 const saveAuthorize = `INSERT INTO authorize (client, code, expires_in, scope, redirect_uri, state, created_at, extra) 
 	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+
 // SaveAuthorize saves authorize data.
 func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	extra, err := assertToBytes(data.UserData)
@@ -255,6 +262,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 }
 
 const loadAuthorize = "SELECT client, code, expires_in, scope, redirect_uri, state, created_at, extra FROM authorize WHERE code=? LIMIT 1"
+
 // LoadAuthorize looks up AuthorizeData by a code.
 // Client information MUST be loaded together.
 // Optionally can return error if expired.
@@ -294,6 +302,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 }
 
 const removeAuthorize = "DELETE FROM authorize WHERE code=?"
+
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *stor) RemoveAuthorize(code string) error {
 	if _, err := s.conn.Exec(removeAuthorize, code); err != nil {
@@ -306,6 +315,7 @@ func (s *stor) RemoveAuthorize(code string) error {
 
 const saveAccess = `INSERT INTO access (client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra) 
 	VALUES (?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+
 // SaveAccess writes AccessData.
 // If RefreshToken is not blank, it must save in a way that can be loaded using LoadRefresh.
 func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
@@ -362,6 +372,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 
 const loadAccess = `SELECT client, authorize, previous, access_token, refresh_token, expires_in, scope, redirect_uri, created_at, extra 
 	FROM access WHERE access_token=? LIMIT 1`
+
 // LoadAccess retrieves access data by token. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
@@ -398,6 +409,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 }
 
 const removeAccess = "DELETE FROM access WHERE access_token=?"
+
 // RemoveAccess revokes or deletes an AccessData.
 func (s *stor) RemoveAccess(code string) error {
 	_, err := s.conn.Exec(removeAccess, code)
@@ -410,6 +422,7 @@ func (s *stor) RemoveAccess(code string) error {
 }
 
 const loadRefresh = "SELECT access FROM refresh WHERE token=? LIMIT 1"
+
 // LoadRefresh retrieves refresh AccessData. Client information MUST be loaded together.
 // AuthorizeData and AccessData DON'T NEED to be loaded if not easily available.
 // Optionally can return error if expired.
@@ -428,6 +441,7 @@ func (s *stor) LoadRefresh(code string) (*osin.AccessData, error) {
 }
 
 const removeRefresh = "DELETE FROM refresh WHERE token=?"
+
 // RemoveRefresh revokes or deletes refresh AccessData.
 func (s *stor) RemoveRefresh(code string) error {
 	_, err := s.conn.Exec(removeRefresh, code)
@@ -440,6 +454,7 @@ func (s *stor) RemoveRefresh(code string) error {
 }
 
 const saveRefresh = "INSERT INTO refresh (token, access) VALUES (?0, ?1)"
+
 func (s *stor) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) {
 	_, err = tx.Exec(saveRefresh, refresh, access)
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	pub "github.com/go-ap/activitypub"
+	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/httpsig"
@@ -17,13 +17,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var AnonymousActor = pub.Actor{
-	ID:   pub.PublicNS,
-	Type: pub.ActorType,
-	Name: pub.NaturalLanguageValues{
-		pub.LangRefValue{
-			Ref:   pub.NilLangRef,
-			Value: pub.Content("Anonymous"),
+var AnonymousActor = vocab.Actor{
+	ID:   vocab.PublicNS,
+	Type: vocab.ActorType,
+	Name: vocab.NaturalLanguageValues{
+		vocab.LangRefValue{
+			Ref:   vocab.NilLangRef,
+			Value: vocab.Content("Anonymous"),
 		},
 	},
 }
@@ -31,26 +31,26 @@ var AnonymousActor = pub.Actor{
 // ReadStore
 type ReadStore interface {
 	// Load returns an Item or an ItemCollection from an IRI
-	Load(pub.IRI) (pub.Item, error)
+	Load(vocab.IRI) (vocab.Item, error)
 }
 
 type keyLoader struct {
 	baseIRI string
 	logFn   func(string, ...interface{})
-	acc     pub.Actor
+	acc     vocab.Actor
 	l       ReadStore
 	c       client.Basic
 }
 
-func (k keyLoader) validateLocalIRI(i pub.IRI) error {
-	if i.Contains(pub.IRI(k.baseIRI), true) {
+func (k keyLoader) validateLocalIRI(i vocab.IRI) error {
+	if i.Contains(vocab.IRI(k.baseIRI), true) {
 		return nil
 	}
 	return errors.Newf("%s is not a local IRI", i)
 }
 
 func (k *keyLoader) GetKey(id string) (interface{}, error) {
-	iri := pub.IRI(id)
+	iri := vocab.IRI(id)
 	u, err := iri.URL()
 	if err != nil {
 		return nil, err
@@ -59,20 +59,20 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 		return nil, errors.Newf("missing key")
 	}
 
-	var ob pub.Item
-	var loadFn func(pub.IRI) (pub.Item, error) = k.l.Load
+	var ob vocab.Item
+	var loadFn func(vocab.IRI) (vocab.Item, error) = k.l.Load
 
-	if !iri.Contains(pub.IRI(k.baseIRI), true) {
+	if !iri.Contains(vocab.IRI(k.baseIRI), true) {
 		loadFn = k.c.LoadIRI
 	}
 
 	if ob, err = loadFn(iri); err != nil {
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
-	if pub.IsNil(ob) {
+	if vocab.IsNil(ob) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
-	err = pub.OnActor(ob, func(a *pub.Actor) error {
+	err = vocab.OnActor(ob, func(a *vocab.Actor) error {
 		k.acc = *a
 		return nil
 	})
@@ -89,14 +89,14 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 
 type oauthLoader struct {
 	logFn func(string, ...interface{})
-	acc   pub.Actor
+	acc   vocab.Actor
 	s     osin.Storage
 	l     ReadStore
 }
 
-func firstOrItem(it pub.Item) (pub.Item, error) {
+func firstOrItem(it vocab.Item) (vocab.Item, error) {
 	if it.IsCollection() {
-		err := pub.OnCollectionIntf(it, func(col pub.CollectionInterface) error {
+		err := vocab.OnCollectionIntf(it, func(col vocab.CollectionInterface) error {
 			it = col.Collection().First()
 			return nil
 		})
@@ -141,17 +141,17 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 		return errors.NotFoundf("unable to load bearer"), ""
 	}
 	if iri, err := assertToBytes(dat.UserData); err == nil {
-		it, err := k.l.Load(pub.IRI(iri))
+		it, err := k.l.Load(vocab.IRI(iri))
 		if err != nil {
 			return unauthorized(err), ""
 		}
-		if pub.IsNil(it) {
+		if vocab.IsNil(it) {
 			return unauthorized(err), ""
 		}
 		if it, err = firstOrItem(it); err != nil {
 			return unauthorized(err), ""
 		}
-		err = pub.OnActor(it, func(act *pub.Actor) error {
+		err = vocab.OnActor(it, func(act *vocab.Actor) error {
 			k.acc = *act
 			return nil
 		})
@@ -190,22 +190,22 @@ type CtxtKey string
 var ActorKey = CtxtKey("__actor")
 
 // ActorContext
-func ActorContext(ctx context.Context) (pub.Actor, bool) {
+func ActorContext(ctx context.Context) (vocab.Actor, bool) {
 	ctxVal := ctx.Value(ActorKey)
-	if p, ok := ctxVal.(pub.Actor); ok {
+	if p, ok := ctxVal.(vocab.Actor); ok {
 		return p, ok
 	}
-	if p, ok := ctxVal.(*pub.Actor); ok {
+	if p, ok := ctxVal.(*vocab.Actor); ok {
 		return *p, ok
 	}
 	return AnonymousActor, false
 }
 
-// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either pub
+// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either vocab
 // an OAuth2 or HTTP Signatures:
 //   For OAuth2 it tries to load the matching local actor and use it further in the processing logic
 //   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
-func (s *Server) LoadActorFromAuthHeader(r *http.Request) (pub.Actor, error) {
+func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	acct := AnonymousActor
 	var challenge string
 	var err error

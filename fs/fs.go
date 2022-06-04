@@ -2,15 +2,16 @@ package fs
 
 import (
 	"encoding/json"
-	"github.com/go-ap/auth/internal/log"
-	"github.com/go-ap/errors"
-	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"time"
+
+	"github.com/go-ap/auth/internal/log"
+	"github.com/go-ap/errors"
+	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -160,8 +161,8 @@ func New(c Config) *stor {
 	}
 	s := stor{
 		path:  fullPath,
-		logFn:   log.EmptyLogFn,
-		errFn:   log.EmptyLogFn,
+		logFn: log.EmptyLogFn,
+		errFn: log.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
