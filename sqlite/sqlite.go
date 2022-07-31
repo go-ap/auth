@@ -14,7 +14,6 @@ import (
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 	"github.com/sirupsen/logrus"
-	_ "modernc.org/sqlite"
 )
 
 const defaultTimeout = 1000 * time.Millisecond
@@ -37,10 +36,10 @@ func New(c Config) *stor {
 }
 
 type stor struct {
-	path   string
-	conn   *sql.DB
-	logFn  log.LoggerFn
-	errFn  log.LoggerFn
+	path  string
+	conn  *sql.DB
+	logFn log.LoggerFn
+	errFn log.LoggerFn
 }
 
 type Config struct {
@@ -191,7 +190,7 @@ func (s *stor) Close() {
 
 // Open
 func (s *stor) Open() (err error) {
-	if s.conn, err = sql.Open("sqlite", s.path); err != nil {
+	if s.conn, err = sqlOpen("sqlite", s.path); err != nil {
 		return errors.Annotatef(err, "could not open sqlite connection")
 	}
 	return
@@ -263,7 +262,6 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 	defer s.Close()
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
-
 
 	return getClient(s.conn, ctx, id)
 }

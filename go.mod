@@ -10,6 +10,7 @@ require (
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/jackc/pgx v3.6.2+incompatible
+	github.com/mattn/go-sqlite3 v1.14.12
 	github.com/openshift/osin v1.0.1
 	github.com/sirupsen/logrus v1.9.0
 	go.etcd.io/bbolt v1.3.6
@@ -35,7 +36,6 @@ require (
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.14.2 // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/lib/pq v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect

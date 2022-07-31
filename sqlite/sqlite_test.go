@@ -2,12 +2,13 @@ package sqlite
 
 import (
 	"database/sql"
-	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"reflect"
 	"testing"
+
+	"github.com/openshift/osin"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 		logrus.WithFields(f).Errorf(m, p...)
 	}
 )
+
 type initFn func(db *sql.DB) error
 
 func testPath(t *testing.T) string {
@@ -53,7 +55,7 @@ func initialize(t *testing.T, fns ...initFn) *stor {
 func TestBootstrap(t *testing.T) {
 	type args struct {
 		conf Config
-		cl osin.Client
+		cl   osin.Client
 	}
 	tests := []struct {
 		name    string
@@ -71,11 +73,10 @@ func TestBootstrap(t *testing.T) {
 	}
 }
 
-
 func Test_stor_Clone(t *testing.T) {
 	tests := []struct {
-		name   string
-		want   osin.Storage
+		name string
+		want osin.Storage
 	}{
 		// TODO: Add test cases.
 	}
@@ -154,7 +155,7 @@ func Test_stor_GetClient(t *testing.T) {
 				t.Errorf("GetClient() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if (tt.want != nil && !reflect.DeepEqual(got, tt.want)) || got == nil{
+			if (tt.want != nil && !reflect.DeepEqual(got, tt.want)) || got == nil {
 				t.Errorf("GetClient() got = %v, want %v", got, tt.want)
 			}
 		})
@@ -174,7 +175,7 @@ func Test_stor_ListClients(t *testing.T) {
 			wantErr: false,
 		},
 		{
-		name: "found",
+			name: "found",
 			init: []initFn{
 				func(db *sql.DB) error {
 					_, err := db.Exec(createClient, "found", "secret", "redirURI", interface{}("extra123"))
@@ -475,8 +476,8 @@ func Test_stor_UpdateClient(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "plain",
-			args:    args{
+			name: "plain",
+			args: args{
 				&osin.DefaultClient{
 					Id:          "found",
 					Secret:      "secret",
