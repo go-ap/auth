@@ -147,23 +147,23 @@ func Bootstrap(c Config, cl osin.Client) error {
 	os.RemoveAll(p)
 
 	s := New(c)
-	if err = s.Open(); err != nil {
+	if err := s.Open(); err != nil {
 		return err
 	}
 	defer s.Close()
-	if _, err = s.conn.Query(createClientTable); err != nil {
+	if _, err := s.conn.Query(createClientTable); err != nil {
 		return err
 	}
-	if _, err = s.conn.Query(createAuthorizeTable); err != nil {
+	if _, err := s.conn.Query(createAuthorizeTable); err != nil {
 		return err
 	}
-	if _, err = s.conn.Query(createAccessTable); err != nil {
+	if _, err := s.conn.Query(createAccessTable); err != nil {
 		return err
 	}
-	if _, err = s.conn.Query(createRefreshTable); err != nil {
+	if _, err := s.conn.Query(createRefreshTable); err != nil {
 		return err
 	}
-	if _, err = s.conn.Query(tuneQuery); err != nil {
+	if _, err := s.conn.Query(tuneQuery); err != nil {
 		return err
 	}
 	return nil
@@ -190,7 +190,7 @@ func (s *stor) Close() {
 
 // Open
 func (s *stor) Open() (err error) {
-	if s.conn, err = sqlOpen("sqlite", s.path); err != nil {
+	if s.conn, err = sqlOpen(s.path); err != nil {
 		return errors.Annotatef(err, "could not open sqlite connection")
 	}
 	return
