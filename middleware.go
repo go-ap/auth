@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -37,7 +36,7 @@ type ReadStore interface {
 type keyLoader struct {
 	baseIRI string
 	logFn   func(string, ...interface{})
-	acc     vocab.Actor
+	acc     *vocab.Actor
 	l       ReadStore
 	c       client.Basic
 }
@@ -73,7 +72,7 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
 	err = vocab.OnActor(ob, func(a *vocab.Actor) error {
-		k.acc = *a
+		k.acc = a
 		return nil
 	})
 	if err != nil {
@@ -89,7 +88,7 @@ func (k *keyLoader) GetKey(id string) (interface{}, error) {
 
 type oauthLoader struct {
 	logFn func(string, ...interface{})
-	acc   vocab.Actor
+	acc   *vocab.Actor
 	s     osin.Storage
 	l     ReadStore
 }
@@ -152,7 +151,7 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 			return unauthorized(err), ""
 		}
 		err = vocab.OnActor(it, func(act *vocab.Actor) error {
-			k.acc = *act
+			k.acc = act
 			return nil
 		})
 		if err != nil {
@@ -183,30 +182,12 @@ func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
 	return v, challenge
 }
 
-// CtxtKey
-type CtxtKey string
-
-// ActorKey
-var ActorKey = CtxtKey("__actor")
-
-// ActorContext
-func ActorContext(ctx context.Context) (vocab.Actor, bool) {
-	ctxVal := ctx.Value(ActorKey)
-	if p, ok := ctxVal.(vocab.Actor); ok {
-		return p, ok
-	}
-	if p, ok := ctxVal.(*vocab.Actor); ok {
-		return *p, ok
-	}
-	return AnonymousActor, false
-}
-
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either vocab
 // an OAuth2 or HTTP Signatures:
 //   For OAuth2 it tries to load the matching local actor and use it further in the processing logic
 //   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
-func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
-	acct := AnonymousActor
+func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) {
+	acct := &AnonymousActor
 	var challenge string
 	var err error
 	method := "none"
