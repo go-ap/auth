@@ -4,9 +4,9 @@ go 1.18
 
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/go-ap/activitypub v0.0.0-20220706134811-0c84d76ce535
-	github.com/go-ap/client v0.0.0-20220706141149-15223abba03f
-	github.com/go-ap/errors v0.0.0-20220618122732-319f41ac54e1
+	github.com/go-ap/activitypub v0.0.0-20220917143152-e4e7018838c0
+	github.com/go-ap/client v0.0.0-20220917143634-73d671c1b49e
+	github.com/go-ap/errors v0.0.0-20220917143055-4283ea5dae18
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/jackc/pgx v3.6.2+incompatible
@@ -24,7 +24,7 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
-	github.com/go-ap/jsonld v0.0.0-20220615144122-1d862b15410d // indirect
+	github.com/go-ap/jsonld v0.0.0-20220917142617-76bf51585778 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
