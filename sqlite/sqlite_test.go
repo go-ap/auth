@@ -13,10 +13,10 @@ import (
 
 var (
 	infFn = func(f log.Ctx, m string, p ...interface{}) {
-		log.Dev(log.DebugLevel).WithContext(f).Infof(m, p...)
+		log.Dev(log.SetLevel(log.DebugLevel)).WithContext(f).Infof(m, p...)
 	}
 	errFn = func(f log.Ctx, m string, p ...interface{}) {
-		log.Dev(log.DebugLevel).WithContext(f).Errorf(m, p...)
+		log.Dev(log.SetLevel(log.DebugLevel)).WithContext(f).Errorf(m, p...)
 	}
 )
 

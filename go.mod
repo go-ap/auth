@@ -3,7 +3,7 @@ module github.com/go-ap/auth
 go 1.18
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20221029115357-f74f856c5d31
+	git.sr.ht/~mariusor/lw v0.0.0-20221030084619-c7813ea7e638
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/go-ap/activitypub v0.0.0-20220917143152-e4e7018838c0
 	github.com/go-ap/client v0.0.0-20220917143634-73d671c1b49e
@@ -49,7 +49,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
-	golang.org/x/sys v0.0.0-20220730100132-1609e554cd39 // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
