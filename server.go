@@ -3,12 +3,11 @@ package auth
 import (
 	"net/http"
 
+	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/auth/internal/log"
 	"github.com/go-ap/client"
 	"github.com/go-chi/chi"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 type Account vocab.Actor
@@ -29,13 +28,13 @@ type Server struct {
 	account Account
 	cl      client.Basic
 	st      ReadStore
-	l       logrus.FieldLogger
+	l       log.Logger
 }
 
 // ID is the type of authorization that IndieAuth is using
 const ID = osin.AuthorizeRequestType("id")
 
-func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
+func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
 	config := osin.ServerConfig{
 		AuthorizationExpiration:   86400,
 		AccessExpiration:          2678400,
@@ -51,18 +50,18 @@ func NewServer(store osin.Storage, l logrus.FieldLogger) (*osin.Server, error) {
 	}
 	s := osin.NewServer(&config, store)
 
-	logFn := log.EmptyLogFn
-	errFn := log.EmptyLogFn
+	logFn := EmptyLogFn
+	errFn := EmptyLogFn
 	if l != nil {
-		logFn = func(ctx logrus.Fields, format string, v ...interface{}) {
-			l.WithFields(ctx).Infof(format, v...)
+		logFn = func(ctx log.Ctx, format string, v ...interface{}) {
+			l.WithContext(ctx).Infof(format, v...)
 		}
-		errFn = func(ctx logrus.Fields, format string, v ...interface{}) {
-			l.WithFields(ctx).Infof(format, v...)
+		errFn = func(ctx log.Ctx, format string, v ...interface{}) {
+			l.WithContext(ctx).Infof(format, v...)
 		}
 	}
 	var err error
-	s.Logger, err = log.New(log.LogFn(logFn), log.ErrFn(errFn))
+	s.Logger, err = NewLogger(LogFn(logFn), ErrFn(errFn))
 	return s, err
 }
 

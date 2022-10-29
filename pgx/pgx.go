@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-ap/auth/internal/log"
+	log "git.sr.ht/~mariusor/lw"
+	auth2 "github.com/go-ap/auth"
 	"github.com/go-ap/errors"
 	"github.com/jackc/pgx"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 type cl struct {
@@ -54,8 +54,8 @@ type Config struct {
 	User    string
 	Pw      string
 	Name    string
-	LogFn   log.LoggerFn
-	ErrFn   log.LoggerFn
+	LogFn   auth2.LoggerFn
+	ErrFn   auth2.LoggerFn
 }
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
@@ -64,16 +64,16 @@ var errNotImplemented = errors.NotImplementedf("not implemented")
 type stor struct {
 	conn  *pgx.Conn
 	conf  Config
-	logFn log.LoggerFn
-	errFn log.LoggerFn
+	logFn auth2.LoggerFn
+	errFn auth2.LoggerFn
 }
 
 // New returns a new postgres storage instance.
 func New(c Config) *stor {
 	s := stor{
 		conf:  c,
-		logFn: log.EmptyLogFn,
-		errFn: log.EmptyLogFn,
+		logFn: auth2.EmptyLogFn,
+		errFn: auth2.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -105,7 +105,7 @@ func (s *stor) Close() {
 }
 
 type logger struct {
-	logFn log.LoggerFn
+	logFn auth2.LoggerFn
 }
 
 func (p logger) Log(level pgx.LogLevel, msg string, data map[string]interface{}) {
@@ -137,7 +137,7 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 	if err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"table": "client", "operation": "select"}, "%s", err)
+		s.errFn(log.Ctx{"table": "client", "operation": "select"}, "%s", err)
 		return result, errors.Annotatef(err, "Storage query error")
 	}
 	for rows.Next() {
@@ -169,7 +169,7 @@ func (s *stor) GetClient(id string) (osin.Client, error) {
 	if err := s.conn.QueryRow(getClient, id).Scan(&cl); err == pgx.ErrNoRows {
 		return nil, errors.NewNotFound(err, "")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "select"}, "%s", err)
+		s.errFn(log.Ctx{"id": id, "table": "client", "operation": "select"}, "%s", err)
 		return &c, errors.Annotatef(err, "Storage query error")
 	}
 	c.Id = cl.Id
@@ -189,12 +189,12 @@ func (s *stor) UpdateClient(c osin.Client) error {
 	}
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId()}, err.Error())
 		return err
 	}
 
 	if _, err := s.conn.Exec(updateClient, c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
@@ -209,12 +209,12 @@ func (s *stor) CreateClient(c osin.Client) error {
 	}
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId()}, err.Error())
 		return err
 	}
 
 	if _, err := s.conn.Exec(createClient, c.GetId(), c.GetSecret(), c.GetRedirectUri(), data); err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
@@ -225,10 +225,10 @@ const removeClient = "DELETE FROM client WHERE id=?"
 // RemoveClient removes a client (identified by id) from the database. Returns an error if something went wrong.
 func (s *stor) RemoveClient(id string) error {
 	if _, err := s.conn.Exec(removeClient, id); err != nil {
-		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
-	s.logFn(logrus.Fields{"id": id}, "removed client")
+	s.logFn(log.Ctx{"id": id}, "removed client")
 	return nil
 }
 
@@ -239,7 +239,7 @@ const saveAuthorize = `INSERT INTO authorize (client, code, expires_in, scope, r
 func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return err
 	}
 
@@ -255,7 +255,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) (err error) {
 	}
 
 	if _, err = s.conn.Exec(saveAuthorize, params...); err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 	return nil
@@ -276,7 +276,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	if err := s.conn.QueryRow(loadAuthorize, code).Scan(&auth); err == pgx.ErrNoRows {
 		return nil, errors.NotFoundf("")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "authorize", "operation": "select"}, err.Error())
 		return nil, errors.Annotatef(err, "")
 	}
 	data.Code = auth.Code
@@ -293,7 +293,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 	}
 
 	if data.ExpireAt().Before(time.Now().UTC()) {
-		s.errFn(logrus.Fields{"code": code}, err.Error())
+		s.errFn(log.Ctx{"code": code}, err.Error())
 		return nil, errors.Errorf("Token expired at %s.", data.ExpireAt().String())
 	}
 
@@ -306,10 +306,10 @@ const removeAuthorize = "DELETE FROM authorize WHERE code=?"
 // RemoveAuthorize revokes or deletes the authorization code.
 func (s *stor) RemoveAuthorize(code string) error {
 	if _, err := s.conn.Exec(removeAuthorize, code); err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed authorization token")
+	s.logFn(log.Ctx{"code": code}, "removed authorization token")
 	return nil
 }
 
@@ -332,19 +332,19 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return err
 	}
 
 	tx, err := s.conn.Begin()
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 
 	if data.RefreshToken != "" {
 		if err := s.saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+			s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 			return err
 		}
 	}
@@ -355,15 +355,15 @@ func (s *stor) SaveAccess(data *osin.AccessData) (err error) {
 	_, err = tx.Exec(saveAccess, data.Client.GetId(), authorizeData.Code, prev, data.AccessToken, data.RefreshToken, data.ExpiresIn, data.Scope, data.RedirectUri, data.CreatedAt.UTC(), extra)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId()}, rbe.Error())
+			s.errFn(log.Ctx{"id": data.Client.GetId()}, rbe.Error())
 			return errors.Annotatef(rbe, "")
 		}
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 
 	if err = tx.Commit(); err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "")
 	}
 
@@ -397,7 +397,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 	result.UserData = acc.Extra
 	client, err := s.GetClient(acc.Client)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "select"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "access", "operation": "select"}, err.Error())
 		return nil, err
 	}
 
@@ -414,10 +414,10 @@ const removeAccess = "DELETE FROM access WHERE access_token=?"
 func (s *stor) RemoveAccess(code string) error {
 	_, err := s.conn.Exec(removeAccess, code)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed access token")
+	s.logFn(log.Ctx{"code": code}, "removed access token")
 	return nil
 }
 
@@ -446,10 +446,10 @@ const removeRefresh = "DELETE FROM refresh WHERE token=?"
 func (s *stor) RemoveRefresh(code string) error {
 	_, err := s.conn.Exec(removeRefresh, code)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed refresh token")
+	s.logFn(log.Ctx{"code": code}, "removed refresh token")
 	return nil
 }
 
@@ -459,7 +459,7 @@ func (s *stor) saveRefresh(tx *pgx.Tx, refresh, access string) (err error) {
 	_, err = tx.Exec(saveRefresh, refresh, access)
 	if err != nil {
 		if rbe := tx.Rollback(); rbe != nil {
-			s.errFn(logrus.Fields{"code": access, "table": "refresh", "operation": "insert"}, rbe.Error())
+			s.errFn(log.Ctx{"code": access, "table": "refresh", "operation": "insert"}, rbe.Error())
 			return errors.Annotatef(rbe, "")
 		}
 		return errors.Annotatef(err, "")

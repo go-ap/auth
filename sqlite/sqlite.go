@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/go-ap/auth/internal/log"
+	log "git.sr.ht/~mariusor/lw"
+	auth2 "github.com/go-ap/auth"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 const defaultTimeout = 1000 * time.Millisecond
@@ -23,8 +23,8 @@ func New(c Config) *stor {
 	p, _ := getFullPath(c)
 	s := new(stor)
 	s.path = p
-	s.logFn = log.EmptyLogFn
-	s.errFn = log.EmptyLogFn
+	s.logFn = auth2.EmptyLogFn
+	s.errFn = auth2.EmptyLogFn
 
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -38,14 +38,14 @@ func New(c Config) *stor {
 type stor struct {
 	path  string
 	conn  *sql.DB
-	logFn log.LoggerFn
-	errFn log.LoggerFn
+	logFn auth2.LoggerFn
+	errFn auth2.LoggerFn
 }
 
 type Config struct {
 	Path  string
-	LogFn log.LoggerFn
-	ErrFn log.LoggerFn
+	LogFn auth2.LoggerFn
+	ErrFn auth2.LoggerFn
 }
 
 var errNotImplemented = errors.NotImplementedf("not implemented")
@@ -183,7 +183,7 @@ func (s *stor) Close() {
 		return
 	}
 	if err := s.conn.Close(); err != nil {
-		s.errFn(logrus.Fields{"err": err.Error()}, "unable to close sqlite db")
+		s.errFn(log.Ctx{"err": err.Error()}, "unable to close sqlite db")
 	}
 	s.conn = nil
 }
@@ -212,7 +212,7 @@ func (s *stor) ListClients() ([]osin.Client, error) {
 	if err == sql.ErrNoRows || rows.Err() == sql.ErrNoRows {
 		return nil, errors.NewNotFound(err, "No clients found")
 	} else if err != nil {
-		s.errFn(logrus.Fields{"table": "client", "operation": "select"}, "%s", err)
+		s.errFn(log.Ctx{"table": "client", "operation": "select"}, "%s", err)
 		return result, errors.Annotatef(err, "Unable to load clients")
 	}
 	for rows.Next() {
@@ -237,7 +237,7 @@ func getClient(conn *sql.DB, ctx context.Context, id string) (osin.Client, error
 		if err == sql.ErrNoRows {
 			return nil, errors.NewNotFound(err, "Client could not be found")
 		}
-		//s.errFn(logrus.Fields{"code": id, "table": "client", "operation": "select"}, "%s", err)
+		//s.errFn(log.Ctx{"code": id, "table": "client", "operation": "select"}, "%s", err)
 		return nil, errors.Annotatef(err, "Unable to load client")
 	}
 	for rows.Next() {
@@ -281,7 +281,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId()}, err.Error())
 		return err
 	}
 
@@ -297,7 +297,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, q, params...); err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId(), "table": "client", "operation": "update"}, err.Error())
 		return errors.Annotatef(err, "Unable to update client")
 	}
 	return nil
@@ -318,7 +318,7 @@ func (s *stor) CreateClient(c osin.Client) error {
 
 	data, err := assertToBytes(c.GetUserData())
 	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId()}, err.Error())
 		return err
 	}
 	params := []interface{}{
@@ -334,7 +334,7 @@ func (s *stor) CreateClient(c osin.Client) error {
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err = s.conn.ExecContext(ctx, q, params...); err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId(), "redirect_uri": c.GetRedirectUri(), "table": "client", "operation": "insert"}, err.Error())
 		return errors.Annotatef(err, "Unable to save new client")
 	}
 	return nil
@@ -351,10 +351,10 @@ func (s *stor) RemoveClient(id string) error {
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, removeClient, id); err != nil {
-		s.errFn(logrus.Fields{"id": id, "table": "client", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"id": id, "table": "client", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "Unalbe to remove client")
 	}
-	s.logFn(logrus.Fields{"id": id}, "removed client")
+	s.logFn(log.Ctx{"id": id}, "removed client")
 	return nil
 }
 
@@ -375,7 +375,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	defer s.Close()
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return err
 	}
 
@@ -396,7 +396,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err = s.conn.ExecContext(ctx, q, params...); err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "table": "authorize", "operation": "insert", "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Unable to save authorize token")
 	}
 	return nil
@@ -411,7 +411,7 @@ func loadAuthorize(conn *sql.DB, ctx context.Context, code string) (*osin.Author
 	if err == sql.ErrNoRows {
 		return nil, errors.NotFoundf("Unable to load authorize token")
 	} else if err != nil {
-		//s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "select"}, err.Error())
+		//s.errFn(log.Ctx{"code": code, "table": "authorize", "operation": "select"}, err.Error())
 		return nil, errors.Annotatef(err, "Unable to load authorize token")
 	}
 
@@ -426,7 +426,7 @@ func loadAuthorize(conn *sql.DB, ctx context.Context, code string) (*osin.Author
 
 		a.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		if !a.CreatedAt.IsZero() && a.ExpireAt().Before(time.Now().UTC()) {
-			//s.errFn(logrus.Fields{"code": code}, err.Error())
+			//s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
 		break
@@ -464,10 +464,10 @@ func (s *stor) RemoveAuthorize(code string) error {
 
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	if _, err := s.conn.ExecContext(ctx, removeAuthorize, code); err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "authorize", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "Unable to delete authorize token")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed authorization token")
+	s.logFn(log.Ctx{"code": code}, "removed authorization token")
 	return nil
 }
 
@@ -491,7 +491,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 
 	extra, err := assertToBytes(data.UserData)
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return err
 	}
 	if err = s.Open(); err != nil {
@@ -519,12 +519,12 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 
 	_, err = s.conn.ExecContext(ctx, saveAccess, params...)
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Unable to create access token")
 	}
 	if len(data.RefreshToken) > 0 {
 		if err = s.saveRefresh(ctx, data.RefreshToken, data.AccessToken); err != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId(), "err": err.Error()}, "unable to save refresh token")
+			s.errFn(log.Ctx{"id": data.Client.GetId(), "err": err.Error()}, "unable to save refresh token")
 			return err
 		}
 	}
@@ -554,7 +554,7 @@ func loadAccess(conn *sql.DB, ctx context.Context, code string) (*osin.AccessDat
 
 		a.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		if !a.CreatedAt.IsZero() && a.ExpireAt().Before(time.Now().UTC()) {
-			//s.errFn(logrus.Fields{"code": code}, err.Error())
+			//s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil, errors.Errorf("Token expired at %s.", a.ExpireAt().String())
 		}
 		break
@@ -604,10 +604,10 @@ func (s *stor) RemoveAccess(code string) error {
 	ctx, _ := context.WithTimeout(context.Background(), defaultTimeout)
 	_, err := s.conn.ExecContext(ctx, removeAccess, code)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "access", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "access", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "Unable to remove access token")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed access token")
+	s.logFn(log.Ctx{"code": code}, "removed access token")
 	return nil
 }
 
@@ -647,10 +647,10 @@ func (s *stor) RemoveRefresh(code string) error {
 
 	_, err := s.conn.ExecContext(ctx, removeRefresh, code)
 	if err != nil {
-		s.errFn(logrus.Fields{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
+		s.errFn(log.Ctx{"code": code, "table": "refresh", "operation": "delete"}, err.Error())
 		return errors.Annotatef(err, "Unable to remove refresh token")
 	}
-	s.logFn(logrus.Fields{"code": code}, "removed refresh token")
+	s.logFn(log.Ctx{"code": code}, "removed refresh token")
 	return nil
 }
 

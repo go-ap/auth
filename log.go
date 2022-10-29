@@ -1,8 +1,10 @@
-package log
+package auth
 
-import "github.com/sirupsen/logrus"
+import (
+	log "git.sr.ht/~mariusor/lw"
+)
 
-type LoggerFn func(logrus.Fields, string, ...interface{})
+type LoggerFn func(log.Ctx, string, ...interface{})
 
 type logger struct {
 	logFn LoggerFn
@@ -25,21 +27,20 @@ func ErrFn(logFn LoggerFn) optionFn {
 	}
 }
 
-func New(opt ...optionFn) (*logger, error) {
+func NewLogger(opt ...optionFn) (*logger, error) {
 	l := new(logger)
 	l.errFn = EmptyLogFn
 	l.logFn = EmptyLogFn
 
 	for _, fn := range opt {
-		err := fn(l)
-		if err != nil {
+		if err := fn(l); err != nil {
 			return nil, err
 		}
 	}
 	return l, nil
 }
 
-var EmptyLogFn = func(logrus.Fields, string, ...interface{}) {}
+var EmptyLogFn = func(log.Ctx, string, ...interface{}) {}
 
 func (l logger) Printf(format string, v ...interface{}) {
 	l.logFn(nil, format, v...)

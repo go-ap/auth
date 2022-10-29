@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-ap/auth/internal/log"
+	auth2 "github.com/go-ap/auth"
 	"github.com/openshift/osin"
 	"math/rand"
 	"os"
@@ -66,7 +66,7 @@ func initialize() *stor {
 	os.MkdirAll(path.Join(tempFolder, accessBucket), defaultPerm)
 	os.MkdirAll(path.Join(tempFolder, authorizeBucket), defaultPerm)
 	os.MkdirAll(path.Join(tempFolder, refreshBucket), defaultPerm)
-	s := stor{ path:  tempFolder, logFn: log.EmptyLogFn, errFn: log.EmptyLogFn }
+	s := stor{path: tempFolder, logFn: auth2.EmptyLogFn, errFn: auth2.EmptyLogFn}
 	return &s
 }
 
@@ -88,29 +88,29 @@ func TestStor_Open(t *testing.T) {
 }
 
 var loadClientTests = map[string]struct {
-		clients []cl
-		want    []osin.Client
-		err     error
-	}{
-		"nil": {
-			clients: []cl{},
-			want:    []osin.Client{},
-			err:     nil,
-		},
-		"test-client-id": {
-			clients: []cl{
-				{
-					Id: "test-client-id",
-				},
+	clients []cl
+	want    []osin.Client
+	err     error
+}{
+	"nil": {
+		clients: []cl{},
+		want:    []osin.Client{},
+		err:     nil,
+	},
+	"test-client-id": {
+		clients: []cl{
+			{
+				Id: "test-client-id",
 			},
-			want: []osin.Client{
-				&osin.DefaultClient{
-					Id:          "test-client-id",
-				},
-			},
-			err: nil,
 		},
-	}
+		want: []osin.Client{
+			&osin.DefaultClient{
+				Id: "test-client-id",
+			},
+		},
+		err: nil,
+	},
+}
 
 func TestStor_ListClients(t *testing.T) {
 
@@ -180,10 +180,10 @@ func TestStor_GetClient(t *testing.T) {
 	}
 }
 
-var createClientTests = map[string]struct{
+var createClientTests = map[string]struct {
 	client *osin.DefaultClient
 	err    error
-} {
+}{
 	"nil": {
 		nil,
 		nil,

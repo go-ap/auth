@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-ap/auth/internal/log"
+	log "git.sr.ht/~mariusor/lw"
+	auth2 "github.com/go-ap/auth"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -58,15 +58,15 @@ type stor struct {
 	d     *bolt.DB
 	path  string
 	root  []byte
-	logFn log.LoggerFn
-	errFn log.LoggerFn
+	logFn auth2.LoggerFn
+	errFn auth2.LoggerFn
 }
 
 type Config struct {
 	Path       string
 	BucketName string
-	LogFn      log.LoggerFn
-	ErrFn      log.LoggerFn
+	LogFn      auth2.LoggerFn
+	ErrFn      auth2.LoggerFn
 }
 
 func Bootstrap(path string, rootBucket []byte) error {
@@ -107,8 +107,8 @@ func New(c Config) *stor {
 	s := stor{
 		path:  c.Path,
 		root:  []byte(c.BucketName),
-		logFn:   log.EmptyLogFn,
-		errFn:   log.EmptyLogFn,
+		logFn: auth2.EmptyLogFn,
+		errFn: auth2.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -279,7 +279,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	}
 	defer s.Close()
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
 	}
 
@@ -338,7 +338,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 		if err := json.Unmarshal(raw, &auth); err != nil {
 			err := errors.Annotatef(err, "Unable to unmarshal authorization object")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return err
 		}
 		data.Code = auth.Code
@@ -351,7 +351,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 
 		if data.ExpireAt().Before(time.Now().UTC()) {
 			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return err
 		}
 
@@ -362,7 +362,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 			rawC := cb.Get([]byte(auth.Client))
 			if err := json.Unmarshal(rawC, &cl); err != nil {
 				err := errors.Annotatef(err, "Unable to unmarshal client object")
-				s.errFn(logrus.Fields{"code": code}, err.Error())
+				s.errFn(log.Ctx{"code": code}, err.Error())
 				return nil
 			}
 			c.Id = cl.Id
@@ -373,7 +373,7 @@ func (s *stor) LoadAuthorize(code string) (*osin.AuthorizeData, error) {
 			data.Client = &c
 		} else {
 			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil
 		}
 		return nil
@@ -423,13 +423,13 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	}
 
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid client user-data")
 	}
 
 	if data.RefreshToken != "" {
 		if err := s.saveRefresh(data.RefreshToken, data.AccessToken); err != nil {
-			s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+			s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 			return err
 		}
 	}
@@ -511,13 +511,13 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 		cb := rb.Bucket([]byte(clientsBucket))
 		if cb == nil {
 			err := errors.Newf("Invalid bucket %s/%s", s.root, clientsBucket)
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil
 		}
 		rawC := cb.Get([]byte(access.Client))
 		if err := json.Unmarshal(rawC, &cl); err != nil {
 			err := errors.Annotatef(err, "Unable to unmarshal client object")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil
 		}
 		c.Id = cl.Id
@@ -528,14 +528,14 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 		result.Client = &c
 		if err != nil {
 			err := errors.Annotatef(err, "Unable to load client for current access token")
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil
 		}
 
 		authB := rb.Bucket([]byte(authorizeBucket))
 		if authB == nil {
 			err := errors.Newf("Invalid bucket %s/%s", s.root, authorizeBucket)
-			s.errFn(logrus.Fields{"code": code}, err.Error())
+			s.errFn(log.Ctx{"code": code}, err.Error())
 			return nil
 		}
 		if access.Authorize != "" {
@@ -544,12 +544,12 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 			rawAuth := authB.Get([]byte(access.Authorize))
 			if rawAuth == nil {
 				//err := errors.Newf("Invalid authorize data")
-				//s.errFn(logrus.Fields{"code": code}, err.Error())
+				//s.errFn(log.Ctx{"code": code}, err.Error())
 				return nil
 			}
 			if err := json.Unmarshal(rawAuth, &auth); err != nil {
 				//err := errors.Annotatef(err, "Unable to unmarshal authorization object")
-				//s.errFn(logrus.Fields{"code": code}, err.Error())
+				//s.errFn(log.Ctx{"code": code}, err.Error())
 				return nil
 			}
 
@@ -565,7 +565,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 
 			if data.ExpireAt().Before(time.Now().UTC()) {
 				err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
-				s.errFn(logrus.Fields{"code": code}, err.Error())
+				s.errFn(log.Ctx{"code": code}, err.Error())
 				return nil
 			}
 			result.AuthorizeData = &data
@@ -575,7 +575,7 @@ func (s *stor) LoadAccess(code string) (*osin.AccessData, error) {
 			rawPrev := ab.Get([]byte(access.Previous))
 			if err := json.Unmarshal(rawPrev, &prevAccess); err != nil {
 				err := errors.Annotatef(err, "Unable to unmarshal previous access object")
-				s.errFn(logrus.Fields{"code": code}, err.Error())
+				s.errFn(log.Ctx{"code": code}, err.Error())
 				return nil
 			}
 			prev := osin.AccessData{}

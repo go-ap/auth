@@ -1,12 +1,12 @@
 package auth
 
 import (
+	log "git.sr.ht/~mariusor/lw"
 	"github.com/go-ap/client"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
-func New(url string, os osin.Storage, st ReadStore, l logrus.FieldLogger) (*Server, error) {
+func New(url string, os osin.Storage, st ReadStore, l log.Logger) (*Server, error) {
 	osin, err := NewServer(os, l)
 	if err != nil {
 		return nil, err

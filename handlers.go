@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
+	log "git.sr.ht/~mariusor/lw"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 func (s *Server) Redirect(w http.ResponseWriter, r *http.Request, url string, status int) {
 	if err := s.saveSession(w, r); err != nil {
-		s.l.WithFields(logrus.Fields{
+		s.l.WithContext(log.Ctx{
 			"status": status,
 			"url":    url,
 		}).Error(err.Error())

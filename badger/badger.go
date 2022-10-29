@@ -8,11 +8,11 @@ import (
 	"reflect"
 	"time"
 
+	log "git.sr.ht/~mariusor/lw"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/go-ap/auth/internal/log"
+	auth2 "github.com/go-ap/auth"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -66,16 +66,16 @@ type stor struct {
 	d     *badger.DB
 	path  string
 	host  string
-	logFn log.LoggerFn
-	errFn log.LoggerFn
+	logFn auth2.LoggerFn
+	errFn auth2.LoggerFn
 	l     badger.Logger
 }
 
 type Config struct {
 	Path  string
 	Host  string
-	LogFn log.LoggerFn
-	ErrFn log.LoggerFn
+	LogFn auth2.LoggerFn
+	ErrFn auth2.LoggerFn
 }
 
 func mkDirIfNotExists(p string) error {
@@ -105,8 +105,8 @@ func New(c Config) *stor {
 	b := stor{
 		path:  c.Path,
 		host:  c.Host,
-		logFn: log.EmptyLogFn,
-		errFn: log.EmptyLogFn,
+		logFn: auth2.EmptyLogFn,
+		errFn: auth2.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		b.errFn = c.ErrFn
@@ -114,7 +114,7 @@ func New(c Config) *stor {
 	if c.LogFn != nil {
 		b.logFn = c.LogFn
 	}
-	b.l, _ = log.New(log.ErrFn(b.logFn), log.ErrFn(b.errFn))
+	b.l, _ = auth2.NewLogger(auth2.ErrFn(b.logFn), auth2.ErrFn(b.errFn))
 	return &b
 }
 
@@ -250,7 +250,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	}
 	defer s.Close()
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
 	}
 	auth := auth{
@@ -366,14 +366,14 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	}
 
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid client user-data")
 	}
 
 	if data.RefreshToken != "" {
 		s.d.Update(func(tx *badger.Txn) error {
 			if err := s.saveRefresh(tx, data.RefreshToken, data.AccessToken); err != nil {
-				s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+				s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 				return err
 			}
 			return nil

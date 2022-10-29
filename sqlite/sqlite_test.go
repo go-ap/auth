@@ -7,16 +7,16 @@ import (
 	"reflect"
 	"testing"
 
+	log "git.sr.ht/~mariusor/lw"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	infFn = func(f logrus.Fields, m string, p ...interface{}) {
-		logrus.WithFields(f).Infof(m, p...)
+	infFn = func(f log.Ctx, m string, p ...interface{}) {
+		log.Dev(log.DebugLevel).WithContext(f).Infof(m, p...)
 	}
-	errFn = func(f logrus.Fields, m string, p ...interface{}) {
-		logrus.WithFields(f).Errorf(m, p...)
+	errFn = func(f log.Ctx, m string, p ...interface{}) {
+		log.Dev(log.DebugLevel).WithContext(f).Errorf(m, p...)
 	}
 )
 

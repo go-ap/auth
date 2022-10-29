@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"strings"
 
+	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/httpsig"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 var AnonymousActor = vocab.Actor{
@@ -197,7 +197,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 			// check OAuth2(plain) bearer if present
 			method = "oauth2"
 			v := oauthLoader{acc: acct, s: s.Server.Storage, l: s.st}
-			v.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
+			v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
 				acct = v.acc
 			}
@@ -206,7 +206,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 			// verify http-signature if present
 			getter := keyLoader{acc: acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
 			method = "httpSig"
-			getter.logFn = s.l.WithFields(logrus.Fields{"from": method}).Debugf
+			getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
 			var v *httpsig.Verifier
 			v, challenge = httpSignatureVerifier(&getter)
@@ -218,7 +218,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 	if err == nil {
 		// TODO(marius): Add actor's host to the logging
 		if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
-			s.l.WithFields(logrus.Fields{
+			s.l.WithContext(log.Ctx{
 				"auth": method,
 				"id":   acct.GetID(),
 			}).Debug("loaded account from Authorization header")
@@ -227,7 +227,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 	}
 	// TODO(marius): fix this challenge passing
 	err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
-	errContext := logrus.Fields{
+	errContext := log.Ctx{
 		"auth":      r.Header.Get("Authorization"),
 		"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
 		"err":       err.Error(),
@@ -240,6 +240,6 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 	if challenge != "" {
 		errContext["challenge"] = challenge
 	}
-	s.l.WithFields(errContext).Warn("Invalid HTTP Authorization")
+	s.l.WithContext(errContext).Warn("Invalid HTTP Authorization")
 	return acct, err
 }

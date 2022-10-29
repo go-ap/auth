@@ -8,10 +8,10 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/go-ap/auth/internal/log"
+	log "git.sr.ht/~mariusor/lw"
+	auth2 "github.com/go-ap/auth"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -64,14 +64,14 @@ func interfaceIsNil(c interface{}) bool {
 
 type stor struct {
 	path  string
-	logFn log.LoggerFn
-	errFn log.LoggerFn
+	logFn auth2.LoggerFn
+	errFn auth2.LoggerFn
 }
 
 type Config struct {
 	Path  string
-	LogFn log.LoggerFn
-	ErrFn log.LoggerFn
+	LogFn auth2.LoggerFn
+	ErrFn auth2.LoggerFn
 }
 
 func mkDirIfNotExists(p string) error {
@@ -161,8 +161,8 @@ func New(c Config) *stor {
 	}
 	s := stor{
 		path:  fullPath,
-		logFn: log.EmptyLogFn,
-		errFn: log.EmptyLogFn,
+		logFn: auth2.EmptyLogFn,
+		errFn: auth2.EmptyLogFn,
 	}
 	if c.ErrFn != nil {
 		s.errFn = c.ErrFn
@@ -291,7 +291,7 @@ func (s *stor) UpdateClient(c osin.Client) error {
 	}
 	defer s.Close()
 	if err != nil {
-		s.errFn(logrus.Fields{"id": c.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": c.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
 	}
 	cl := cl{
@@ -330,7 +330,7 @@ func (s *stor) SaveAuthorize(data *osin.AuthorizeData) error {
 	}
 	defer s.Close()
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId(), "code": data.Code}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId(), "code": data.Code}, err.Error())
 		return errors.Annotatef(err, "Invalid user-data")
 	}
 
@@ -368,7 +368,7 @@ func (s *stor) loadAuthorizeFromPath(authPath string) (*osin.AuthorizeData, erro
 
 		if data.ExpireAt().Before(time.Now().UTC()) {
 			err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
-			s.errFn(logrus.Fields{"code": auth.Code}, err.Error())
+			s.errFn(log.Ctx{"code": auth.Code}, err.Error())
 			return err
 		}
 		cl, err := s.loadClientFromPath(path.Join(s.path, clientsBucket, auth.Client))
@@ -428,7 +428,7 @@ func (s *stor) SaveAccess(data *osin.AccessData) error {
 	}
 
 	if err != nil {
-		s.errFn(logrus.Fields{"id": data.Client.GetId()}, err.Error())
+		s.errFn(log.Ctx{"id": data.Client.GetId()}, err.Error())
 		return errors.Annotatef(err, "Invalid client user-data")
 	}
 
@@ -487,12 +487,12 @@ func (s *stor) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
 			data, err := s.loadAuthorizeFromPath(path.Join(s.path, authorizeBucket, access.Authorize))
 			if err != nil {
 				err := errors.Annotatef(err, "Unable to load authorize data for current access token %s.", access.AccessToken)
-				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				s.errFn(log.Ctx{"code": access.AccessToken}, err.Error())
 				return nil
 			}
 			if data.ExpireAt().Before(time.Now().UTC()) {
 				err := errors.Errorf("Token expired at %s.", data.ExpireAt().String())
-				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				s.errFn(log.Ctx{"code": access.AccessToken}, err.Error())
 				return nil
 			}
 			result.AuthorizeData = data
@@ -516,7 +516,7 @@ func (s *stor) loadAccessFromPath(accessPath string) (*osin.AccessData, error) {
 			})
 			if err != nil {
 				err := errors.Annotatef(err, "Unable to load previous access token for %s.", access.AccessToken)
-				s.errFn(logrus.Fields{"code": access.AccessToken}, err.Error())
+				s.errFn(log.Ctx{"code": access.AccessToken}, err.Error())
 				return nil
 			}
 		}
