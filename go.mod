@@ -3,12 +3,12 @@ module github.com/go-ap/auth
 go 1.23
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20241117105956-4b4009e28502
+	git.sr.ht/~mariusor/lw v0.0.0-20250114195945-ba9c7bcca3c1
 	git.sr.ht/~mariusor/mask v0.0.0-20250114195353-98705a6977b7
 	github.com/go-ap/activitypub v0.0.0-20250112165501-7b898763a1e9
 	github.com/go-ap/client v0.0.0-20250112171502-daf7a388c2cc
 	github.com/go-ap/errors v0.0.0-20241212155021-5a598b6bf467
-	github.com/go-ap/filters v0.0.0-20250112171040-56ab034847c4
+	github.com/go-ap/filters v0.0.0-20250120192219-348d2d08111c
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
