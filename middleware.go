@@ -182,10 +182,11 @@ func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
 	return v, challenge
 }
 
-// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either vocab
+// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
-//   For OAuth2 it tries to load the matching local actor and use it further in the processing logic
-//   For HTTP Signatures it tries to load the federated actor and use it further in the processing logic
+//
+// * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
+// * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
 func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) {
 	acct := &AnonymousActor
 	var challenge string
@@ -221,7 +222,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 			s.l.WithContext(log.Ctx{
 				"auth": method,
 				"id":   acct.GetID(),
-			}).Debug("loaded account from Authorization header")
+			}).Debugf("loaded account from Authorization header")
 		}
 		return acct, nil
 	}
@@ -240,6 +241,6 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 	if challenge != "" {
 		errContext["challenge"] = challenge
 	}
-	s.l.WithContext(errContext).Warn("Invalid HTTP Authorization")
+	s.l.WithContext(errContext).Warnf("Invalid HTTP Authorization")
 	return acct, err
 }

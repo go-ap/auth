@@ -14,7 +14,7 @@ func (s *Server) Redirect(w http.ResponseWriter, r *http.Request, url string, st
 		s.l.WithContext(log.Ctx{
 			"status": status,
 			"url":    url,
-		}).Error(err.Error())
+		}).Errorf(err.Error())
 	}
 
 	http.Redirect(w, r, url, status)
