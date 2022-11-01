@@ -3,7 +3,7 @@ module github.com/go-ap/auth
 go 1.18
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20221031154329-f1683ece2b50
+	git.sr.ht/~mariusor/lw v0.0.0-20221101144835-d67cadffabf0
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/go-ap/activitypub v0.0.0-20221030091545-e2b6e01b277c
 	github.com/go-ap/client v0.0.0-20221030091733-9f80b7f1efcc
@@ -25,7 +25,6 @@ require (
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73 // indirect
-	github.com/go-chi/chi/v5 v5.0.7 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
@@ -38,12 +37,15 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.14.2 // indirect
 	github.com/lib/pq v1.2.0 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
+	github.com/rs/xid v1.4.0 // indirect
+	github.com/rs/zerolog v1.28.0 // indirect
 	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
-	github.com/sirupsen/logrus v1.9.0 // indirect
+	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/valyala/fastjson v1.6.3 // indirect
 	go.opencensus.io v0.22.5 // indirect
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
