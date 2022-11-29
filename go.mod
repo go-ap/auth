@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20221124080058-e91ea2c1fdc2
-	github.com/go-ap/activitypub v0.0.0-20221128055236-304ff21d7ea5
-	github.com/go-ap/client v0.0.0-20221128055333-64816687f0f0
+	github.com/go-ap/activitypub v0.0.0-20221129071730-d68022eb490b
+	github.com/go-ap/client v0.0.0-20221129072953-019c2679a04b
 	github.com/go-ap/errors v0.0.0-20221115052505-8aaa26f930b4
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-chi/chi v4.1.2+incompatible
