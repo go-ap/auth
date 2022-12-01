@@ -220,9 +220,9 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 		// TODO(marius): Add actor's host to the logging
 		if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
 			s.l.WithContext(log.Ctx{
-				"auth": method,
+				"type": method,
 				"id":   acct.GetID(),
-			}).Debugf("loaded account from Authorization header")
+			}).Debugf("loaded Actor from Authorization header")
 		}
 		return acct, nil
 	}
