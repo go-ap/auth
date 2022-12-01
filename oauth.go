@@ -6,7 +6,7 @@ import (
 	"github.com/openshift/osin"
 )
 
-func New(url string, os osin.Storage, st ReadStore, l log.Logger) (*Server, error) {
+func New(url string, os osin.Storage, st ReadStore, cl client.Basic, l log.Logger) (*Server, error) {
 	osin, err := NewServer(os, l)
 	if err != nil {
 		return nil, err
@@ -15,7 +15,7 @@ func New(url string, os osin.Storage, st ReadStore, l log.Logger) (*Server, erro
 		Server:  osin,
 		baseURL: url,
 		account: Account(AnonymousActor),
-		cl:      client.New(),
+		cl:      cl,
 		st:      st,
 		l:       l,
 	}, err
