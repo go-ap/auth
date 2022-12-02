@@ -3,9 +3,9 @@ module github.com/go-ap/auth
 go 1.18
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20221202072550-3074689f8f43
+	git.sr.ht/~mariusor/lw v0.0.0-20221202111053-2dd31f3348e7
 	github.com/go-ap/activitypub v0.0.0-20221201100613-364a4fe06e5e
-	github.com/go-ap/client v0.0.0-20221202073926-53667009c78b
+	github.com/go-ap/client v0.0.0-20221202111559-57ef6bd2c06d
 	github.com/go-ap/errors v0.0.0-20221201010224-09b9c5d09ea9
 	github.com/go-ap/httpsig v0.0.0-20210714162115-62a09257db51
 	github.com/go-chi/chi v4.1.2+incompatible
