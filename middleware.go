@@ -197,7 +197,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) 
 		if strings.Contains(auth, "Bearer") {
 			// check OAuth2(plain) bearer if present
 			method = "oauth2"
-			v := oauthLoader{acc: acct, s: s.Server.Storage, l: s.st}
+			v := oauthLoader{acc: acct, s: s.Storage, l: s.st}
 			v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
 				acct = v.acc

@@ -23,7 +23,7 @@ func (a *Account) IsLogged() bool {
 }
 
 type Server struct {
-	Server  *osin.Server
+	*osin.Server
 	baseURL string
 	account Account
 	cl      client.Basic
