@@ -187,60 +187,62 @@ func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (s *Server) LoadActorFromAuthHeader(r *http.Request) (*vocab.Actor, error) {
-	acct := &AnonymousActor
+func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
+	acct := AnonymousActor
 	var challenge string
 	var err error
 	method := "none"
-
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		if strings.Contains(auth, "Bearer") {
-			// check OAuth2(plain) bearer if present
-			method = "oauth2"
-			v := oauthLoader{acc: acct, s: s.Storage, l: s.st}
-			v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-			if err, challenge = v.Verify(r); err == nil {
-				acct = v.acc
-			}
-		}
-		if strings.Contains(auth, "Signature") {
-			// verify http-signature if present
-			getter := keyLoader{acc: acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-			method = "httpSig"
-			getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-
-			var v *httpsig.Verifier
-			v, challenge = httpSignatureVerifier(&getter)
-			if _, err = v.Verify(r); err == nil {
-				acct = getter.acc
-			}
-		}
-	}
-	if err == nil {
-		// TODO(marius): Add actor's host to the logging
-		if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
-			s.l.WithContext(log.Ctx{
-				"type": method,
-				"id":   acct.GetID(),
-			}).Debugf("loaded Actor from Authorization header")
-		}
+	if r == nil || r.Header == nil {
 		return acct, nil
 	}
-	// TODO(marius): fix this challenge passing
-	err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
-	errContext := log.Ctx{
-		"auth":      r.Header.Get("Authorization"),
-		"req":       fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI()),
-		"err":       err.Error(),
-		"challenge": challenge,
+
+	errContext := log.Ctx{}
+
+	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Bearer") {
+		// check OAuth2(plain) bearer if present
+		method = "OAuth2"
+		errContext["header"] = auth
+		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
+		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
+		if err, challenge = v.Verify(r); err == nil {
+			acct = *v.acc
+		}
 	}
-	id := acct.GetID()
-	if id.IsValid() {
-		errContext["id"] = id
+	if sig := r.Header.Get("Signature"); sig != "" {
+		// verify http-signature if present
+		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
+		errContext["header"] = sig
+		method = "HTTP-Sig"
+		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
+
+		var v *httpsig.Verifier
+		v, challenge = httpSignatureVerifier(&getter)
+		if _, err = v.Verify(r); err == nil {
+			acct = *getter.acc
+		}
 	}
-	if challenge != "" {
+	if err != nil {
+		// TODO(marius): fix this challenge passing
+		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
+		errContext["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
+		errContext["err"] = err.Error()
 		errContext["challenge"] = challenge
+		id := acct.GetID()
+		if id.IsValid() {
+			errContext["id"] = id
+		}
+		if challenge != "" {
+			errContext["challenge"] = challenge
+		}
+		s.l.WithContext(errContext).Warnf("Invalid HTTP Authorization")
+		return acct, err
 	}
-	s.l.WithContext(errContext).Warnf("Invalid HTTP Authorization")
-	return acct, err
+	// TODO(marius): Add actor's host to the logging
+	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
+		s.l.WithContext(log.Ctx{
+			"type": method,
+			"id":   acct.GetID(),
+		}).Debugf("loaded Actor from Authorization header")
+	}
+	return acct, nil
 }
