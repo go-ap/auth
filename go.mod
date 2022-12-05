@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20221202111053-2dd31f3348e7
-	github.com/go-ap/activitypub v0.0.0-20221201100613-364a4fe06e5e
-	github.com/go-ap/client v0.0.0-20221202111559-57ef6bd2c06d
+	github.com/go-ap/activitypub v0.0.0-20221205033012-80bb22c4b3ee
+	github.com/go-ap/client v0.0.0-20221205034133-b8e0a0089dad
 	github.com/go-ap/errors v0.0.0-20221201010224-09b9c5d09ea9
 	github.com/go-ap/httpsig v0.0.0-20221203064646-3647b4d88fdf
 	github.com/go-chi/chi v4.1.2+incompatible
@@ -27,7 +27,7 @@ require (
 	github.com/valyala/fastjson v1.6.3 // indirect
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/oauth2 v0.2.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
