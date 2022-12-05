@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -12,7 +13,7 @@ import (
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/httpsig"
+	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
 )
 
@@ -41,14 +42,7 @@ type keyLoader struct {
 	c       client.Basic
 }
 
-func (k keyLoader) validateLocalIRI(i vocab.IRI) error {
-	if i.Contains(vocab.IRI(k.baseIRI), true) {
-		return nil
-	}
-	return errors.Newf("%s is not a local IRI", i)
-}
-
-func (k *keyLoader) GetKey(id string) (interface{}, error) {
+func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	iri := vocab.IRI(id)
 	u, err := iri.URL()
 	if err != nil {
@@ -163,25 +157,6 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	return nil, ""
 }
 
-func httpSignatureVerifier(getter *keyLoader) (*httpsig.Verifier, string) {
-	v := httpsig.NewVerifier(getter)
-	v.SetRequiredHeaders([]string{"(request-target)", "host", "date"})
-
-	var challengeParams []string
-	if getter.baseIRI != "" {
-		challengeParams = append(challengeParams, fmt.Sprintf("realm=%q", getter.baseIRI))
-	}
-	if headers := v.RequiredHeaders(); len(headers) > 0 {
-		challengeParams = append(challengeParams, fmt.Sprintf("headers=%q", strings.Join(headers, " ")))
-	}
-
-	challenge := "Signature"
-	if len(challengeParams) > 0 {
-		challenge += fmt.Sprintf(" %s", strings.Join(challengeParams, ", "))
-	}
-	return v, challenge
-}
-
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
@@ -214,11 +189,21 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		errContext["header"] = sig
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
+		algos := []httpsig.Algorithm{httpsig.ED25519, httpsig.RSA_SHA512, httpsig.RSA_SHA256}
 
-		var v *httpsig.Verifier
-		v, challenge = httpSignatureVerifier(&getter)
-		if _, err = v.Verify(r); err == nil {
-			acct = *getter.acc
+		var v httpsig.Verifier
+		v, err = httpsig.NewVerifier(r)
+		if err == nil {
+			var k crypto.PublicKey
+			k, err = getter.GetKey(v.KeyId())
+			if err == nil {
+				for _, algo := range algos {
+					if err = v.Verify(k, algo); err == nil {
+						acct = *getter.acc
+						break
+					}
+				}
+			}
 		}
 	}
 	if err != nil {
@@ -227,8 +212,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		errContext["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 		errContext["err"] = err.Error()
 		errContext["challenge"] = challenge
-		id := acct.GetID()
-		if id.IsValid() {
+		if id := acct.GetID(); id.IsValid() {
 			errContext["id"] = id
 		}
 		if challenge != "" {
