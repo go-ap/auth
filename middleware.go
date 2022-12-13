@@ -192,11 +192,10 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		algos := []httpsig.Algorithm{httpsig.ED25519, httpsig.RSA_SHA512, httpsig.RSA_SHA256}
 
 		var v httpsig.Verifier
-		v, err = httpsig.NewVerifier(r)
-		if err == nil {
-			var k crypto.PublicKey
-			k, err = getter.GetKey(v.KeyId())
-			if err == nil {
+		var k crypto.PublicKey
+
+		if v, err = httpsig.NewVerifier(r); err == nil {
+			if k, err = getter.GetKey(v.KeyId()); err == nil {
 				for _, algo := range algos {
 					if err = v.Verify(k, algo); err == nil {
 						acct = *getter.acc
