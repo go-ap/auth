@@ -2,6 +2,9 @@ package auth
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -157,6 +160,37 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	return nil, ""
 }
 
+func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
+	v, err := httpsig.NewVerifier(r)
+	if  err != nil {
+		return errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
+	}
+	k, err := keyGetter.GetKey(v.KeyId())
+	if  err != nil {
+		return errors.Annotatef(err, "unable to load public key based on signature")
+	}
+	algos := compatibleVerifyAlgorithms(k)
+	for _, algo := range algos {
+		if err := v.Verify(k, algo); err == nil {
+			return nil
+		}
+	}
+	return errors.Newf("unable to verify HTTP Signature with any of the attempted algorithms: %v", algos)
+}
+
+func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
+	algos := make([]httpsig.Algorithm, 0)
+	switch pubKey.(type) {
+	case *rsa.PublicKey:
+		algos = append(algos, httpsig.RSA_SHA256, httpsig.RSA_SHA512)
+	case *ecdsa.PublicKey:
+		algos = append(algos, httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256)
+	case ed25519.PublicKey:
+		algos = append(algos, httpsig.ED25519)
+	}
+	return algos
+}
+
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
@@ -174,7 +208,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	errContext := log.Ctx{}
 
 	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Bearer") {
-		// check OAuth2(plain) bearer if present
+		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
 		errContext["header"] = auth
 		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
@@ -184,25 +218,14 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		}
 	}
 	if sig := r.Header.Get("Signature"); sig != "" {
-		// verify http-signature if present
+		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
 		errContext["header"] = sig
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-		algos := []httpsig.Algorithm{httpsig.ED25519, httpsig.RSA_SHA512, httpsig.RSA_SHA256}
 
-		var v httpsig.Verifier
-		var k crypto.PublicKey
-
-		if v, err = httpsig.NewVerifier(r); err == nil {
-			if k, err = getter.GetKey(v.KeyId()); err == nil {
-				for _, algo := range algos {
-					if err = v.Verify(k, algo); err == nil {
-						acct = *getter.acc
-						break
-					}
-				}
-			}
+		if err = verifyHTTPSignature(r, &getter); err == nil {
+			acct = *getter.acc
 		}
 	}
 	if err != nil {
