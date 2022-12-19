@@ -59,12 +59,15 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	var loadFn func(vocab.IRI) (vocab.Item, error) = k.l.Load
 
 	if !iri.Contains(vocab.IRI(k.baseIRI), true) {
+		k.logFn("IRI is on remote host: %s", iri)
 		loadFn = k.c.LoadIRI
 	}
 
+	k.logFn("Loading IRI: %s", iri)
 	if ob, err = loadFn(iri); err != nil {
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
+	k.logFn("response received: %+s", ob)
 	if vocab.IsNil(ob) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
@@ -210,12 +213,13 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		return acct, nil
 	}
 
-	errContext := log.Ctx{}
+	logCtx := log.Ctx{}
+	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
 	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Bearer") {
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
-		errContext["header"] = auth
+		logCtx["header"] = auth
 		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
 		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 		if err, challenge = v.Verify(r); err == nil {
@@ -225,7 +229,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if sig := r.Header.Get("Signature"); sig != "" {
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		errContext["header"] = sig
+		logCtx["header"] = sig
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
@@ -236,24 +240,24 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if err != nil {
 		// TODO(marius): fix this challenge passing
 		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
-		errContext["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
-		errContext["err"] = err.Error()
-		errContext["challenge"] = challenge
+		logCtx["err"] = err.Error()
+		logCtx["challenge"] = challenge
 		if id := acct.GetID(); id.IsValid() {
-			errContext["id"] = id
+			logCtx["id"] = id
 		}
 		if challenge != "" {
-			errContext["challenge"] = challenge
+			logCtx["challenge"] = challenge
 		}
-		s.l.WithContext(errContext).Warnf("Invalid HTTP Authorization")
+		s.l.WithContext(logCtx).Warnf("Invalid HTTP Authorization")
 		return acct, err
 	}
 	// TODO(marius): Add actor's host to the logging
 	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
-		s.l.WithContext(log.Ctx{
-			"type": method,
-			"id":   acct.GetID(),
-		}).Debugf("loaded Actor from Authorization header")
+		logCtx["auth"] = method
+		logCtx["id"] = acct.GetID()
+		logCtx["type"] = acct.GetType()
+		logCtx["name"] = acct.Name.String()
+		s.l.WithContext(logCtx).Debugf("loaded Actor from Authorization header")
 	}
 	return acct, nil
 }
