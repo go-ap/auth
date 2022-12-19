@@ -68,6 +68,9 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	if vocab.IsNil(ob) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
+	if !vocab.IsObject(ob) {
+		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, ob)
+	}
 	err = vocab.OnActor(ob, func(a *vocab.Actor) error {
 		k.acc = a
 		return nil
@@ -162,16 +165,18 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 
 func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
 	v, err := httpsig.NewVerifier(r)
-	if  err != nil {
+	if err != nil {
 		return errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
 	}
 	k, err := keyGetter.GetKey(v.KeyId())
-	if  err != nil {
+	if err != nil {
 		return errors.Annotatef(err, "unable to load public key based on signature")
 	}
 	algos := compatibleVerifyAlgorithms(k)
 	for _, algo := range algos {
-		if err := v.Verify(k, algo); err == nil {
+		if err := v.Verify(k, algo); err != nil {
+			keyGetter.logFn("Unable to verify request with %s %T: %+s", algo, k, err)
+		} else {
 			return nil
 		}
 	}
