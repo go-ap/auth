@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestServer_LoadActorFromAuthHeader(t *testing.T) {
 				st:      tt.fields.st,
 				l:       tt.fields.l,
 			}
-			r := http.Request{Header: http.Header{}}
+			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
 			r.Header.Set("Authorization", tt.header)
 			got, err := s.LoadActorFromAuthHeader(&r)
 			if (err != nil) != tt.wantErr {
