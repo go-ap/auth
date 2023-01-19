@@ -67,13 +67,13 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	if ob, err = loadFn(iri); err != nil {
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
-	k.logFn("response received: %+s", ob)
 	if vocab.IsNil(ob) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
 	if !vocab.IsObject(ob) {
 		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, ob)
 	}
+	k.logFn("response received: %+s", ob)
 	err = vocab.OnActor(ob, func(a *vocab.Actor) error {
 		k.acc = a
 		return nil
