@@ -216,20 +216,29 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
-	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Bearer") {
+	isOauth2 := r.Header.Get("Authorization") != "" && strings.Contains(r.Header.Get("Authorization"), "Bearer")
+	if isOauth2 {
+		header := r.Header.Get("Authorization")
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
-		logCtx["header"] = auth
+		logCtx["header"] = header
 		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
 		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 		if err, challenge = v.Verify(r); err == nil {
 			acct = *v.acc
 		}
 	}
-	if sig := r.Header.Get("Signature"); sig != "" {
+	var header string
+	if auth := r.Header.Get("Signature"); auth != "" {
+		header = auth
+	}
+	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Signature") {
+		header = auth
+	}
+	if header != "" {
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		logCtx["header"] = sig
+		logCtx["header"] = header
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
@@ -241,7 +250,6 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		// TODO(marius): fix this challenge passing
 		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
 		logCtx["err"] = err.Error()
-		logCtx["challenge"] = challenge
 		if id := acct.GetID(); id.IsValid() {
 			logCtx["id"] = id
 		}
@@ -253,7 +261,9 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	}
 	// TODO(marius): Add actor's host to the logging
 	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
+		u, _ := acct.GetID().URL()
 		logCtx["auth"] = method
+		logCtx["instance"] = u.Host
 		logCtx["id"] = acct.GetID()
 		logCtx["type"] = acct.GetType()
 		logCtx["name"] = acct.Name.String()
