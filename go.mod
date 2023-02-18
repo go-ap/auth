@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20221202111053-2dd31f3348e7
-	github.com/go-ap/activitypub v0.0.0-20221209114049-1ceafda50f9f
-	github.com/go-ap/client v0.0.0-20230125140507-b30e32f7fa90
+	github.com/go-ap/activitypub v0.0.0-20230218112952-bfb607b04799
+	github.com/go-ap/client v0.0.0-20230218115938-0fe3ee2edd31
 	github.com/go-ap/errors v0.0.0-20221205040414-01c1adfc98ea
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-fed/httpsig v1.1.0
@@ -21,12 +21,12 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/rs/xid v1.4.0 // indirect
-	github.com/rs/zerolog v1.28.0 // indirect
+	github.com/rs/zerolog v1.29.0 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
-	golang.org/x/net v0.5.0 // indirect
-	golang.org/x/oauth2 v0.4.0 // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/oauth2 v0.5.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
