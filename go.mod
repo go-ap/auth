@@ -9,7 +9,7 @@ require (
 	github.com/go-ap/errors v0.0.0-20221205040414-01c1adfc98ea
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-fed/httpsig v1.1.0
-	github.com/openshift/osin v1.0.1
+	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
 )
 
 require (
