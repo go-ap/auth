@@ -16,6 +16,7 @@ import (
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
+	"github.com/go-ap/filters"
 	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
 )
@@ -34,7 +35,7 @@ var AnonymousActor = vocab.Actor{
 // ReadStore
 type ReadStore interface {
 	// Load returns an Item or an ItemCollection from an IRI
-	Load(vocab.IRI) (vocab.Item, error)
+	Load(vocab.IRI, ...filters.Fn) (vocab.Item, error)
 }
 
 type keyLoader struct {
@@ -56,11 +57,13 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	}
 
 	var ob vocab.Item
-	var loadFn func(vocab.IRI) (vocab.Item, error) = k.l.Load
+	var loadFn = k.l.Load
 
 	if !iri.Contains(vocab.IRI(k.baseIRI), true) {
 		k.logFn("IRI is on remote host: %s", iri)
-		loadFn = k.c.LoadIRI
+		loadFn = func(iri vocab.IRI, _ ...filters.Fn) (vocab.Item, error) {
+			return k.c.LoadIRI(iri)
+		}
 	}
 
 	k.logFn("Loading IRI: %s", iri)
