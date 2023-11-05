@@ -35,7 +35,7 @@ var AnonymousActor = vocab.Actor{
 // ReadStore
 type ReadStore interface {
 	// Load returns an Item or an ItemCollection from an IRI
-	Load(vocab.IRI, ...filters.Fn) (vocab.Item, error)
+	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
 }
 
 type keyLoader struct {
@@ -61,7 +61,7 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 
 	if !iri.Contains(vocab.IRI(k.baseIRI), true) {
 		k.logFn("IRI is on remote host: %s", iri)
-		loadFn = func(iri vocab.IRI, _ ...filters.Fn) (vocab.Item, error) {
+		loadFn = func(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) {
 			return k.c.LoadIRI(iri)
 		}
 	}
