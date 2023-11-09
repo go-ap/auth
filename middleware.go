@@ -48,12 +48,9 @@ type keyLoader struct {
 
 func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	iri := vocab.IRI(id)
-	u, err := iri.URL()
+	_, err := iri.URL()
 	if err != nil {
 		return nil, err
-	}
-	if u.Fragment != "main-key" {
-		return nil, errors.Newf("missing key")
 	}
 
 	var ob vocab.Item
