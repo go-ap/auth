@@ -4,10 +4,10 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20230317075520-07e173563bf8
-	github.com/go-ap/activitypub v0.0.0-20231114162308-e219254dc5c9
-	github.com/go-ap/client v0.0.0-20231114162455-f09cf9766e95
+	github.com/go-ap/activitypub v0.0.0-20240210142307-6872961eb180
+	github.com/go-ap/client v0.0.0-20240210142450-02ea3070dc69
 	github.com/go-ap/errors v0.0.0-20231003111023-183eef4b31b7
-	github.com/go-ap/filters v0.0.0-20231114163756-0a70c1a4a942
+	github.com/go-ap/filters v0.0.0-20240210142437-bf62766d3898
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
@@ -23,12 +23,12 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/rs/xid v1.5.0 // indirect
-	github.com/rs/zerolog v1.31.0 // indirect
+	github.com/rs/zerolog v1.32.0 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
 	golang.org/x/crypto v0.13.0 // indirect
-	golang.org/x/oauth2 v0.14.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/oauth2 v0.17.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	google.golang.org/protobuf v1.32.0 // indirect
 )
