@@ -3,7 +3,7 @@ module github.com/go-ap/auth
 go 1.18
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20240313142800-531789c76b6d
+	git.sr.ht/~mariusor/lw v0.0.0-20240323171419-d538df4af052
 	github.com/go-ap/activitypub v0.0.0-20240323154407-e2e30475b980
 	github.com/go-ap/client v0.0.0-20240323154701-a45ab836e28a
 	github.com/go-ap/errors v0.0.0-20240304112515-6077fa9c17b0
