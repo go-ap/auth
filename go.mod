@@ -7,7 +7,7 @@ require (
 	github.com/go-ap/activitypub v0.0.0-20240323154407-e2e30475b980
 	github.com/go-ap/client v0.0.0-20240323154701-a45ab836e28a
 	github.com/go-ap/errors v0.0.0-20240304112515-6077fa9c17b0
-	github.com/go-ap/filters v0.0.0-20240323154637-69f11fe42323
+	github.com/go-ap/filters v0.0.0-20240324132854-cb16501b1c5a
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
