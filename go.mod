@@ -15,6 +15,7 @@ require (
 
 require (
 	git.sr.ht/~mariusor/go-xsd-duration v0.0.0-20220703122237-02e73435a078 // indirect
+	git.sr.ht/~mariusor/secret v0.0.0-20240324085018-dc1510f1b862 // indirect
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73 // indirect
 	github.com/go-chi/chi/v5 v5.0.12 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	log "git.sr.ht/~mariusor/lw"
+	"git.sr.ht/~mariusor/secret"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
@@ -199,6 +200,14 @@ func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
 	return algos
 }
 
+func getAuthorization(hdr string) (string, string) {
+	pieces := strings.SplitN(hdr, " ", 2)
+	if len(pieces) < 2 {
+		return hdr, ""
+	}
+	return pieces[0], pieces[1]
+}
+
 // LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
@@ -216,18 +225,6 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
-	isOauth2 := r.Header.Get("Authorization") != "" && strings.Contains(r.Header.Get("Authorization"), "Bearer")
-	if isOauth2 {
-		header := r.Header.Get("Authorization")
-		// check OAuth2(plain) Bearer if present
-		method = "OAuth2"
-		logCtx["header"] = header
-		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
-		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-		if err, challenge = v.Verify(r); err == nil {
-			acct = *v.acc
-		}
-	}
 	var header string
 	if auth := r.Header.Get("Signature"); auth != "" {
 		header = auth
@@ -235,10 +232,23 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Signature") {
 		header = auth
 	}
+
+	typ, auth := getAuthorization(header)
+	isOauth2 := typ == "Bearer"
+	if isOauth2 {
+		// check OAuth2(plain) Bearer if present
+		method = "OAuth2"
+		logCtx["header"] = strings.Replace(header, auth, string(secret.S(auth)), 1)
+		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
+		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
+		if err, challenge = v.Verify(r); err == nil {
+			acct = *v.acc
+		}
+	}
 	if header != "" {
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		logCtx["header"] = header
+		logCtx["header"] = strings.Replace(header, auth, string(secret.S(auth)), 1)
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
