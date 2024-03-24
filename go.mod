@@ -4,10 +4,11 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20240323171419-d538df4af052
-	github.com/go-ap/activitypub v0.0.0-20240323154407-e2e30475b980
-	github.com/go-ap/client v0.0.0-20240323154701-a45ab836e28a
+	git.sr.ht/~mariusor/secret v0.0.0-20240324085018-dc1510f1b862
+	github.com/go-ap/activitypub v0.0.0-20240324143732-70ec96f244e6
+	github.com/go-ap/client v0.0.0-20240324144035-f314cf467c26
 	github.com/go-ap/errors v0.0.0-20240304112515-6077fa9c17b0
-	github.com/go-ap/filters v0.0.0-20240324132854-cb16501b1c5a
+	github.com/go-ap/filters v0.0.0-20240324144020-fa2c80e401ec
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
@@ -15,7 +16,6 @@ require (
 
 require (
 	git.sr.ht/~mariusor/go-xsd-duration v0.0.0-20220703122237-02e73435a078 // indirect
-	git.sr.ht/~mariusor/secret v0.0.0-20240324085018-dc1510f1b862 // indirect
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73 // indirect
 	github.com/go-chi/chi/v5 v5.0.12 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
