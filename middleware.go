@@ -229,7 +229,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if auth := r.Header.Get("Signature"); auth != "" {
 		header = auth
 	}
-	if auth := r.Header.Get("Authorization"); strings.Contains(auth, "Signature") {
+	if auth := r.Header.Get("Authorization"); auth != "" {
 		header = auth
 	}
 
