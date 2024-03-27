@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20240323171419-d538df4af052
-	git.sr.ht/~mariusor/secret v0.0.0-20240324085018-dc1510f1b862
+	git.sr.ht/~mariusor/mask v0.0.0-20240327084502-ef2a9438457e
 	github.com/go-ap/activitypub v0.0.0-20240324143732-70ec96f244e6
 	github.com/go-ap/client v0.0.0-20240324144035-f314cf467c26
 	github.com/go-ap/errors v0.0.0-20240304112515-6077fa9c17b0

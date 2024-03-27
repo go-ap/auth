@@ -39,6 +39,7 @@ func WithLogger(l log.Logger) OptionFn {
 		return nil
 	}
 }
+
 func New(optFns ...OptionFn) (*Server, error) {
 	s := new(Server)
 	s.account = Account(AnonymousActor)

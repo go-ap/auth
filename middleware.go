@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	log "git.sr.ht/~mariusor/lw"
-	"git.sr.ht/~mariusor/secret"
+	"git.sr.ht/~mariusor/mask"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
@@ -238,7 +238,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if isOauth2 {
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
-		logCtx["header"] = strings.Replace(header, auth, string(secret.S(auth)), 1)
+		logCtx["header"] = strings.Replace(header, auth, string(mask.S(auth)), 1)
 		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
 		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 		if err, challenge = v.Verify(r); err == nil {
@@ -248,7 +248,7 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if header != "" {
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		logCtx["header"] = strings.Replace(header, auth, string(secret.S(auth)), 1)
+		logCtx["header"] = strings.Replace(header, auth, string(mask.S(auth)), 1)
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
