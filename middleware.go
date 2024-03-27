@@ -222,9 +222,6 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		return acct, nil
 	}
 
-	logCtx := log.Ctx{}
-	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
-
 	var header string
 	if auth := r.Header.Get("Signature"); auth != "" {
 		header = auth
@@ -233,9 +230,19 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 		header = auth
 	}
 
+	if header == "" {
+		return acct, nil
+	}
+
 	typ, auth := getAuthorization(header)
-	isOauth2 := typ == "Bearer"
-	if isOauth2 {
+	if typ == "" {
+		return acct, nil
+	}
+
+	logCtx := log.Ctx{}
+	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
+
+	if typ == "Bearer" {
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
 		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
