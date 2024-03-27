@@ -238,17 +238,16 @@ func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
 	if isOauth2 {
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
-		logCtx["header"] = strings.Replace(header, auth, string(mask.S(auth)), 1)
+		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
 		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 		if err, challenge = v.Verify(r); err == nil {
 			acct = *v.acc
 		}
-	}
-	if header != "" {
+	} else {
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		logCtx["header"] = strings.Replace(header, auth, string(mask.S(auth)), 1)
+		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 		method = "HTTP-Sig"
 		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
 
