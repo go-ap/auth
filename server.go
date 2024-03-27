@@ -6,7 +6,7 @@ import (
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/openshift/osin"
 )
 
