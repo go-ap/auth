@@ -40,7 +40,7 @@ func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
 		AccessExpiration:          2678400,
 		TokenType:                 "Bearer",
 		AllowedAuthorizeTypes:     osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN, ID},
-		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD /*osin.CLIENT_CREDENTIALS*/},
+		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, osin.CLIENT_CREDENTIALS},
 		ErrorStatusCode:           http.StatusForbidden,
 		AllowClientSecretInParams: false,
 		AllowGetAccessRequest:     false,
