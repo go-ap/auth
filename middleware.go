@@ -206,9 +206,15 @@ func getAuthorization(hdr string) (string, string) {
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
 func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
 	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
-	st, _ := s.Storage.(oauthStore)
+	var st oauthStore
 	isLocalFn := func(iri vocab.IRI) bool {
-		return !iri.Contains(vocab.IRI(s.baseURL), true)
+		return false
+	}
+	if s.Server != nil && s.Server.Storage != nil {
+		st, _ = s.Server.Storage.(oauthStore)
+		isLocalFn = func(iri vocab.IRI) bool {
+			return !iri.Contains(vocab.IRI(s.baseURL), true)
+		}
 	}
 	ar := ClientResolver(s.cl, SolverWithLogger(s.l), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
 	return ar.LoadActorFromRequest(r)

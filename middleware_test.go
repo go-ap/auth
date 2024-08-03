@@ -24,7 +24,7 @@ func TestActorContext(t *testing.T) {
 	t.Skipf("TODO")
 }
 
-func TestServer_LoadActorFromAuthHeader(t *testing.T) {
+func TestServer_LoadActorFromRequest(t *testing.T) {
 	type fields struct {
 		Server  *osin.Server
 		baseURL string
@@ -55,7 +55,6 @@ func TestServer_LoadActorFromAuthHeader(t *testing.T) {
 				baseURL: tt.fields.baseURL,
 				account: tt.fields.account,
 				cl:      tt.fields.cl,
-				st:      tt.fields.st,
 				l:       tt.fields.l,
 			}
 			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
