@@ -16,13 +16,20 @@ func WithURL(u string) OptionFn {
 	}
 }
 
-func WithStorage(st ReadStore) OptionFn {
-	return func(s *Server) error {
-		s.st = st
-		if _, ok := st.(osin.Storage); !ok {
-			return errors.Newf("invalid osin storage %T", st)
+func WithStorage(st oauthStore) OptionFn {
+	if os, ok := st.(osin.Storage); ok {
+		return func(s *Server) error {
+			ss, err := NewServer(os, s.l)
+			if err != nil {
+				return err
+			}
+			s.Server = ss
+			s.Storage = os
+			return nil
 		}
-		return nil
+	}
+	return func(s *Server) error {
+		return errors.Newf("invalid osin storage %T", st)
 	}
 }
 
@@ -49,17 +56,8 @@ func New(optFns ...OptionFn) (*Server, error) {
 			return s, err
 		}
 	}
-	if s.st == nil {
-		return nil, errors.Newf("Storage was not set")
+	if s.Storage == nil {
+		return nil, errors.Newf("st was not set")
 	}
-	os, ok := s.st.(osin.Storage)
-	if !ok {
-		return nil, errors.Newf("Storage type %T is not compatible with %T", s.st, osin.Storage(nil))
-	}
-	ss, err := NewServer(os, s.l)
-	if err != nil {
-		return nil, err
-	}
-	s.Server = ss
 	return s, nil
 }

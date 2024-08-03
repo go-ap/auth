@@ -27,20 +27,22 @@ type Server struct {
 	baseURL string
 	account Account
 	cl      client.Basic
-	st      ReadStore
 	l       log.Logger
 }
 
 // ID is the type of authorization that IndieAuth is using
 const ID = osin.AuthorizeRequestType("id")
 
-func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
-	config := osin.ServerConfig{
+var (
+	DefaultAuthorizeTypes = osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN, ID}
+	DefaultAccessTypes    = osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD /*osin.CLIENT_CREDENTIALS*/}
+
+	DefaultConfig = osin.ServerConfig{
 		AuthorizationExpiration:   86400,
 		AccessExpiration:          2678400,
 		TokenType:                 "Bearer",
-		AllowedAuthorizeTypes:     osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN, ID},
-		AllowedAccessTypes:        osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, osin.CLIENT_CREDENTIALS},
+		AllowedAuthorizeTypes:     DefaultAuthorizeTypes,
+		AllowedAccessTypes:        DefaultAccessTypes,
 		ErrorStatusCode:           http.StatusForbidden,
 		AllowClientSecretInParams: false,
 		AllowGetAccessRequest:     false,
@@ -48,7 +50,10 @@ func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
 		RedirectUriSeparator:      "\n",
 		//RequirePKCEForPublicClients: true,
 	}
-	s := osin.NewServer(&config, store)
+)
+
+func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
+	s := osin.NewServer(&DefaultConfig, store)
 
 	logFn := EmptyLogFn
 	errFn := EmptyLogFn

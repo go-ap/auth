@@ -30,7 +30,7 @@ func TestServer_LoadActorFromAuthHeader(t *testing.T) {
 		baseURL string
 		account Account
 		cl      client.Basic
-		st      ReadStore
+		st      readStore
 		l       lw.Logger
 	}
 	tests := []struct {
@@ -60,13 +60,13 @@ func TestServer_LoadActorFromAuthHeader(t *testing.T) {
 			}
 			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
 			r.Header.Set("Authorization", tt.header)
-			got, err := s.LoadActorFromAuthHeader(&r)
+			got, err := s.LoadActorFromRequest(&r)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadActorFromAuthHeader() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("LoadActorFromRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("LoadActorFromAuthHeader() got = %v, want %v", got, tt.want)
+				t.Errorf("LoadActorFromRequest() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

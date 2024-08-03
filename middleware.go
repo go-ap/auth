@@ -12,10 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	log "git.sr.ht/~mariusor/lw"
-	"git.sr.ht/~mariusor/mask"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/go-fed/httpsig"
@@ -33,18 +30,16 @@ var AnonymousActor = vocab.Actor{
 	},
 }
 
-// ReadStore
-type ReadStore interface {
+// readStore
+type readStore interface {
 	// Load returns an Item or an ItemCollection from an IRI
 	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
 }
 
 type keyLoader struct {
-	baseIRI string
-	logFn   func(string, ...interface{})
-	acc     *vocab.Actor
-	l       ReadStore
-	c       client.Basic
+	loadFn func(vocab.IRI) (*vocab.Actor, error)
+	logFn  func(string, ...interface{})
+	acc    *vocab.Actor
 }
 
 func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
@@ -55,17 +50,9 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	}
 
 	var ob vocab.Item
-	var loadFn = k.l.Load
-
-	if !iri.Contains(vocab.IRI(k.baseIRI), true) {
-		k.logFn("IRI is on remote host: %s", iri)
-		loadFn = func(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) {
-			return k.c.LoadIRI(iri)
-		}
-	}
 
 	k.logFn("Loading IRI: %s", iri)
-	if ob, err = loadFn(iri); err != nil {
+	if ob, err = k.loadFn(iri); err != nil {
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
 	if vocab.IsNil(ob) {
@@ -90,11 +77,15 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	return x509.ParsePKIXPublicKey(block.Bytes)
 }
 
+type oauthStore interface {
+	readStore
+	LoadAccess(token string) (*osin.AccessData, error)
+}
+
 type oauthLoader struct {
 	logFn func(string, ...interface{})
 	acc   *vocab.Actor
-	s     osin.Storage
-	l     ReadStore
+	s     oauthStore
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
@@ -144,7 +135,7 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 		return errors.NotFoundf("unable to load bearer"), ""
 	}
 	if iri, err := assertToBytes(dat.UserData); err == nil {
-		it, err := k.l.Load(vocab.IRI(iri))
+		it, err := k.s.Load(vocab.IRI(iri))
 		if err != nil {
 			return unauthorized(err), ""
 		}
@@ -208,82 +199,17 @@ func getAuthorization(hdr string) (string, string) {
 	return pieces[0], pieces[1]
 }
 
-// LoadActorFromAuthHeader reads the Authorization header of an HTTP request and tries to decode it either
+// LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (s *Server) LoadActorFromAuthHeader(r *http.Request) (vocab.Actor, error) {
-	acct := AnonymousActor
-	var challenge string
-	var err error
-	method := "none"
-	if r == nil || r.Header == nil {
-		return acct, nil
+func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
+	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
+	st, _ := s.Storage.(oauthStore)
+	isLocalFn := func(iri vocab.IRI) bool {
+		return !iri.Contains(vocab.IRI(s.baseURL), true)
 	}
-
-	var header string
-	if auth := r.Header.Get("Signature"); auth != "" {
-		header = auth
-	}
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		header = auth
-	}
-
-	if header == "" {
-		return acct, nil
-	}
-
-	typ, auth := getAuthorization(header)
-	if typ == "" {
-		return acct, nil
-	}
-
-	logCtx := log.Ctx{}
-	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
-
-	if typ == "Bearer" {
-		// check OAuth2(plain) Bearer if present
-		method = "OAuth2"
-		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-		v := oauthLoader{acc: &acct, s: s.Storage, l: s.st}
-		v.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-		if err, challenge = v.Verify(r); err == nil {
-			acct = *v.acc
-		}
-	} else {
-		// verify HTTP-Signature if present
-		getter := keyLoader{acc: &acct, l: s.st, baseIRI: s.baseURL, c: s.cl}
-		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-		method = "HTTP-Sig"
-		getter.logFn = s.l.WithContext(log.Ctx{"from": method}).Debugf
-
-		if err = verifyHTTPSignature(r, &getter); err == nil {
-			acct = *getter.acc
-		}
-	}
-	if err != nil {
-		// TODO(marius): fix this challenge passing
-		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
-		logCtx["err"] = err.Error()
-		if id := acct.GetID(); id.IsValid() {
-			logCtx["id"] = id
-		}
-		if challenge != "" {
-			logCtx["challenge"] = challenge
-		}
-		s.l.WithContext(logCtx).Warnf("Invalid HTTP Authorization")
-		return acct, err
-	}
-	// TODO(marius): Add actor's host to the logging
-	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
-		u, _ := acct.GetID().URL()
-		logCtx["auth"] = method
-		logCtx["instance"] = u.Host
-		logCtx["id"] = acct.GetID()
-		logCtx["type"] = acct.GetType()
-		logCtx["name"] = acct.Name.String()
-		s.l.WithContext(logCtx).Debugf("loaded Actor from Authorization header")
-	}
-	return acct, nil
+	ar := ClientResolver(s.cl, SolverWithLogger(s.l), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
+	return ar.LoadActorFromRequest(r)
 }
