@@ -2,6 +2,7 @@ package auth
 
 import (
 	log "git.sr.ht/~mariusor/lw"
+	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
@@ -9,9 +10,16 @@ import (
 
 type OptionFn func(s *Server) error
 
+func WithIRI(i ...vocab.IRI) OptionFn {
+	return func(s *Server) error {
+		s.localURLs = i
+		return nil
+	}
+}
+
 func WithURL(u string) OptionFn {
 	return func(s *Server) error {
-		s.baseURL = u
+		s.localURLs = vocab.IRIs{vocab.IRI(u)}
 		return nil
 	}
 }

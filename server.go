@@ -24,10 +24,10 @@ func (a *Account) IsLogged() bool {
 
 type Server struct {
 	*osin.Server
-	baseURL string
-	account Account
-	cl      client.Basic
-	l       log.Logger
+	localURLs vocab.IRIs
+	account   Account
+	cl        client.Basic
+	l         log.Logger
 }
 
 // ID is the type of authorization that IndieAuth is using

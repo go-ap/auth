@@ -26,12 +26,12 @@ func TestActorContext(t *testing.T) {
 
 func TestServer_LoadActorFromRequest(t *testing.T) {
 	type fields struct {
-		Server  *osin.Server
-		baseURL string
-		account Account
-		cl      client.Basic
-		st      readStore
-		l       lw.Logger
+		Server    *osin.Server
+		localURLs vocab.IRIs
+		account   Account
+		cl        client.Basic
+		st        readStore
+		l         lw.Logger
 	}
 	tests := []struct {
 		name    string
@@ -51,11 +51,11 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Server{
-				Server:  tt.fields.Server,
-				baseURL: tt.fields.baseURL,
-				account: tt.fields.account,
-				cl:      tt.fields.cl,
-				l:       tt.fields.l,
+				Server:    tt.fields.Server,
+				localURLs: tt.fields.localURLs,
+				account:   tt.fields.account,
+				cl:        tt.fields.cl,
+				l:         tt.fields.l,
 			}
 			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
 			r.Header.Set("Authorization", tt.header)

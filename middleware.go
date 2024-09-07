@@ -213,7 +213,12 @@ func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
 	if s.Server != nil && s.Server.Storage != nil {
 		st, _ = s.Server.Storage.(oauthStore)
 		isLocalFn = func(iri vocab.IRI) bool {
-			return !iri.Contains(vocab.IRI(s.baseURL), true)
+			for _, i := range s.localURLs {
+				if iri.Contains(i, true) {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	ar := ClientResolver(s.cl, SolverWithLogger(s.l), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))

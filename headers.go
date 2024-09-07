@@ -52,9 +52,9 @@ func (a actorResolver) Load(iri vocab.IRI) (*vocab.Actor, error) {
 		err   error
 	)
 	if a.st == nil || a.iriIsLocal(iri) {
-		actor, err = a.c.LoadIRI(iri)
-	} else {
 		actor, err = a.st.Load(iri)
+	} else {
+		actor, err = a.c.LoadIRI(iri)
 	}
 	if err != nil {
 		return &AnonymousActor, err
@@ -76,39 +76,13 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		return acct, nil
 	}
 
-	var header string
-	if auth := r.Header.Get("Signature"); auth != "" {
-		header = auth
-	}
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		header = auth
-	}
-
-	if header == "" {
-		return acct, nil
-	}
-
-	typ, auth := getAuthorization(header)
-	if typ == "" {
-		return acct, nil
-	}
-
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
-	if typ == "Bearer" {
-		// check OAuth2(plain) Bearer if present
-		method = "OAuth2"
-		storage, ok := a.st.(oauthStore)
-		if ok {
-			logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-			v := oauthLoader{acc: &acct, s: storage}
-			v.logFn = a.l.WithContext(log.Ctx{"from": method}).Debugf
-			if err, challenge = v.Verify(r); err == nil {
-				acct = *v.acc
-			}
-		}
-	} else {
+	var header string
+	if auth := r.Header.Get("Signature"); auth != "" {
+		header = auth
+
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, loadFn: a.Load}
 		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
@@ -118,6 +92,31 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		if err = verifyHTTPSignature(r, &getter); err == nil {
 			acct = *getter.acc
 		}
+	}
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		header = auth
+		typ, auth := getAuthorization(header)
+		if typ == "" {
+			return acct, nil
+		}
+
+		if typ == "Bearer" {
+			// check OAuth2(plain) Bearer if present
+			method = "OAuth2"
+			storage, ok := a.st.(oauthStore)
+			if ok {
+				logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
+				v := oauthLoader{acc: &acct, s: storage}
+				v.logFn = a.l.WithContext(log.Ctx{"from": method}).Debugf
+				if err, challenge = v.Verify(r); err == nil {
+					acct = *v.acc
+				}
+			}
+		}
+	}
+
+	if header == "" {
+		return acct, nil
 	}
 	if err != nil {
 		// TODO(marius): fix this challenge passing
