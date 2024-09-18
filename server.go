@@ -6,7 +6,6 @@ import (
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
-	"github.com/go-chi/chi/v5"
 	"github.com/openshift/osin"
 )
 
@@ -68,14 +67,4 @@ func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
 	var err error
 	s.Logger, err = NewLogger(LogFn(logFn), ErrFn(errFn))
 	return s, err
-}
-
-func (s Server) Routes(r chi.Router) chi.Routes {
-	return r.Route("/oauth", func(r chi.Router) {
-		// Authorization code endpoint
-		r.With(s.ValidateLoggedIn()).Get("/authorize", s.Authorize)
-		r.Post("/authorize", s.Authorize)
-		// Access token endpoint
-		r.Post("/token", s.Token)
-	})
 }
