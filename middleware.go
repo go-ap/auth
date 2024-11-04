@@ -207,19 +207,16 @@ func getAuthorization(hdr string) (string, string) {
 func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
 	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
 	var st oauthStore
-	isLocalFn := func(iri vocab.IRI) bool {
-		return false
-	}
 	if s.Server != nil && s.Server.Storage != nil {
 		st, _ = s.Server.Storage.(oauthStore)
-		isLocalFn = func(iri vocab.IRI) bool {
-			for _, i := range s.localURLs {
-				if iri.Contains(i, true) {
-					return true
-				}
+	}
+	isLocalFn := func(iri vocab.IRI) bool {
+		for _, i := range s.localURLs {
+			if iri.Contains(i, true) {
+				return true
 			}
-			return false
 		}
+		return false
 	}
 	ar := ClientResolver(s.cl, SolverWithLogger(s.l), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
 	return ar.LoadActorFromRequest(r)

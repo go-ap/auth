@@ -19,7 +19,10 @@ func WithIRI(i ...vocab.IRI) OptionFn {
 
 func WithURL(u string) OptionFn {
 	return func(s *Server) error {
-		s.localURLs = vocab.IRIs{vocab.IRI(u)}
+		if s.localURLs == nil {
+			s.localURLs = make(vocab.IRIs, 0)
+		}
+		s.localURLs = append(s.localURLs, vocab.IRI(u))
 		return nil
 	}
 }
