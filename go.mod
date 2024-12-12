@@ -6,7 +6,7 @@ require (
 	git.sr.ht/~mariusor/lw v0.0.0-20241117105956-4b4009e28502
 	git.sr.ht/~mariusor/mask v0.0.0-20240327084502-ef2a9438457e
 	github.com/go-ap/activitypub v0.0.0-20241212161521-36eb87cc3381
-	github.com/go-ap/client v0.0.0-20241212161801-d555b313c3bf
+	github.com/go-ap/client v0.0.0-20241212174032-4826270ad6a3
 	github.com/go-ap/errors v0.0.0-20241212155021-5a598b6bf467
 	github.com/go-ap/filters v0.0.0-20241212161731-6700826ce543
 	github.com/go-fed/httpsig v1.1.0
@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	git.sr.ht/~mariusor/cache v0.0.0-20241212154534-e6e4fac0679d // indirect
+	git.sr.ht/~mariusor/cache v0.0.0-20241212172633-e1563652acb4 // indirect
 	git.sr.ht/~mariusor/go-xsd-duration v0.0.0-20220703122237-02e73435a078 // indirect
 	github.com/RoaringBitmap/roaring v1.9.4 // indirect
 	github.com/bits-and-blooms/bitset v1.19.1 // indirect
