@@ -8,7 +8,7 @@ require (
 	github.com/go-ap/activitypub v0.0.0-20241212161521-36eb87cc3381
 	github.com/go-ap/client v0.0.0-20241212174032-4826270ad6a3
 	github.com/go-ap/errors v0.0.0-20241212155021-5a598b6bf467
-	github.com/go-ap/filters v0.0.0-20241212161731-6700826ce543
+	github.com/go-ap/filters v0.0.0-20241223151848-0aad921dae0d
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
 )
@@ -17,9 +17,9 @@ require (
 	git.sr.ht/~mariusor/cache v0.0.0-20241212172633-e1563652acb4 // indirect
 	git.sr.ht/~mariusor/go-xsd-duration v0.0.0-20220703122237-02e73435a078 // indirect
 	github.com/RoaringBitmap/roaring v1.9.4 // indirect
-	github.com/bits-and-blooms/bitset v1.19.1 // indirect
+	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73 // indirect
-	github.com/go-chi/chi/v5 v5.1.0 // indirect
+	github.com/go-chi/chi/v5 v5.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jdkato/prose v1.2.1 // indirect
 	github.com/mariusor/qstring v0.0.0-20200204164351-5a99d46de39d // indirect
