@@ -47,13 +47,16 @@ func SolverWithStorage(s oauthStore) func(*actorResolver) {
 }
 
 func (a actorResolver) Load(iri vocab.IRI) (*vocab.Actor, error) {
-	var (
-		actor vocab.Item
-		err   error
-	)
-	if a.st == nil || a.iriIsLocal(iri) {
+	var err error
+	if a.st == nil && a.c == nil {
+		return &AnonymousActor, nil
+	}
+
+	var actor vocab.Item = &AnonymousActor
+
+	if a.st != nil || a.iriIsLocal(iri) {
 		actor, err = a.st.Load(iri)
-	} else {
+	} else if a.c != nil {
 		actor, err = a.c.LoadIRI(iri)
 	}
 	if err != nil {
