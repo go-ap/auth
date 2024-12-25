@@ -1,14 +1,24 @@
 package auth
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"github.com/go-ap/client"
+	"github.com/go-ap/jsonld"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/openshift/osin"
 )
 
@@ -29,7 +39,7 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 		Server    *osin.Server
 		localURLs vocab.IRIs
 		account   Account
-		cl        client.Basic
+		cl        Client
 		st        readStore
 		l         lw.Logger
 	}
@@ -66,6 +76,115 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("LoadActorFromRequest() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+var ll = lw.Dev()
+var cl = client.New(
+	client.WithLogger(ll.WithContext(lw.Ctx{"log": "client"})),
+	client.SkipTLSValidation(true),
+)
+
+var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
+	ll.WithContext(ctx).Debugf(msg, p...)
+}
+
+func isNotLocal(_ vocab.IRI) bool {
+	return false
+}
+
+var prv, _ = rsa.GenerateKey(rand.Reader, 512)
+
+func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
+	pubKey := prvKey.PublicKey
+	pubEnc, err := x509.MarshalPKIXPublicKey(&pubKey)
+	if err != nil {
+		panic(err)
+	}
+	p := pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubEnc,
+	}
+
+	return string(pem.EncodeToMemory(&p))
+}
+
+func keyAndActor(base string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		k := vocab.PublicKey{
+			ID:           vocab.IRI(base + "/jdoe#main"),
+			Owner:        vocab.IRI(base + "/jdoe"),
+			PublicKeyPem: pemEncodePublicKey(prv),
+		}
+		actor := vocab.Actor{
+			ID:        vocab.IRI(base + "/jdoe"),
+			Type:      vocab.PersonType,
+			PublicKey: k,
+		}
+
+		payload, _ := jsonld.Marshal(actor)
+		if filepath.Base(r.URL.Path) == "key" {
+			k.ID = vocab.IRI(base + "/jdoe/key")
+			payload, _ = jsonld.Marshal(k)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(payload)
+	})
+}
+
+var srv, _ = testServerWithURL(keyAndActor)
+
+func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, error) {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	ts := httptest.NewUnstartedServer(nil)
+	ts.Listener = l
+	ts.Config.Handler = handler(fmt.Sprintf("http://%s", ts.Listener.Addr().String()))
+
+	ts.Start()
+	return ts, nil
+}
+
+func Test_keyLoader_GetKey(t *testing.T) {
+	loadActorFromKeyFn := (actorResolver{c: cl, l: logFn, iriIsLocal: isNotLocal}).LoadActorFromKeyIRI
+	tests := []struct {
+		name    string
+		arg     string
+		want    crypto.PublicKey
+		wantErr bool
+	}{
+		//{
+		//	name:    "empty",
+		//	wantErr: true,
+		//},
+		//{
+		//	name:    "remote key IRI as separate resource",
+		//	arg:     srv.URL + "/jdoe/key",
+		//	want:    prv.Public(),
+		//	wantErr: false,
+		//},
+		{
+			name:    "remote key IRI as actor resource",
+			arg:     srv.URL + "/jdoe#main",
+			want:    prv.Public(),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := &keyLoader{
+				loadActorFromKeyFn: loadActorFromKeyFn,
+				logFn:              logFn,
+			}
+			got, err := k.GetKey(tt.arg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetKey() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

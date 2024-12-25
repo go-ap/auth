@@ -17,6 +17,7 @@ import (
 	"github.com/go-ap/filters"
 	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
+	"git.sr.ht/~mariusor/lw"
 )
 
 var AnonymousActor = vocab.Actor{
@@ -37,9 +38,9 @@ type readStore interface {
 }
 
 type keyLoader struct {
-	loadFn func(vocab.IRI) (*vocab.Actor, error)
-	logFn  func(string, ...interface{})
-	acc    *vocab.Actor
+	loadActorFromKeyFn func(vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error)
+	logFn              LoggerFn
+	acc                *vocab.Actor
 }
 
 func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
@@ -49,28 +50,27 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 		return nil, err
 	}
 
-	var ob vocab.Item
+	var act *vocab.Actor
+	var key *vocab.PublicKey
 
-	k.logFn("Loading IRI: %s", iri)
-	if ob, err = k.loadFn(iri); err != nil {
+	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
+	if act, key, err = k.loadActorFromKeyFn(iri); err != nil {
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
-	if vocab.IsNil(ob) {
+	if vocab.IsNil(act) {
 		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
-	if !vocab.IsObject(ob) {
-		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, ob)
+	if !vocab.IsObject(act) {
+		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
 	}
-	k.logFn("response received: %+s", ob)
-	err = vocab.OnActor(ob, func(a *vocab.Actor) error {
-		k.acc = a
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	k.logFn(nil, "response received: %+s", act)
+	k.acc = act
+
+	if key == nil {
+		return nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
 	}
 
-	block, _ := pem.Decode([]byte(k.acc.PublicKey.PublicKeyPem))
+	block, _ := pem.Decode([]byte(key.PublicKeyPem))
 	if block == nil {
 		return nil, errors.Newf("failed to parse PEM block containing the public key")
 	}
@@ -83,7 +83,7 @@ type oauthStore interface {
 }
 
 type oauthLoader struct {
-	logFn func(string, ...interface{})
+	logFn LoggerFn
 	acc   *vocab.Actor
 	s     oauthStore
 }
@@ -170,7 +170,7 @@ func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
 	algos := compatibleVerifyAlgorithms(k)
 	for _, algo := range algos {
 		if err := v.Verify(k, algo); err != nil {
-			keyGetter.logFn("Unable to verify request with %s %T: %+s", algo, k, err)
+			keyGetter.logFn(nil, "Unable to verify request with %s %T: %+s", algo, k, err)
 		} else {
 			return nil
 		}
@@ -218,6 +218,9 @@ func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
 		}
 		return false
 	}
-	ar := ClientResolver(s.cl, SolverWithLogger(s.l), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
+	var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
+		s.l.WithContext(ctx).Debugf(msg, p...)
+	}
+	ar := ClientResolver(s.cl, SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
 	return ar.LoadActorFromRequest(r)
 }

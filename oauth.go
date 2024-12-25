@@ -3,7 +3,6 @@ package auth
 import (
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 )
@@ -44,7 +43,7 @@ func WithStorage(st oauthStore) OptionFn {
 	}
 }
 
-func WithClient(cl client.Basic) OptionFn {
+func WithClient(cl Client) OptionFn {
 	return func(s *Server) error {
 		s.cl = cl
 		return nil

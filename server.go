@@ -5,7 +5,6 @@ import (
 
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/openshift/osin"
 )
 
@@ -25,7 +24,7 @@ type Server struct {
 	*osin.Server
 	localURLs vocab.IRIs
 	account   Account
-	cl        client.Basic
+	cl        Client
 	l         log.Logger
 }
 
