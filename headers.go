@@ -27,12 +27,13 @@ type actorResolver struct {
 	l          LoggerFn
 }
 
-func ClientResolver(cl Client, initFns ...func(*actorResolver)) *actorResolver {
-	s := &actorResolver{c: cl}
+func ClientResolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
+	s := actorResolver{c: cl}
 	for _, fn := range initFns {
-		fn(s)
+		fn(&s)
 	}
 	return s
+
 }
 
 func SolverWithLocalIRIFn(fn func(vocab.IRI) bool) func(*actorResolver) {
@@ -75,41 +76,46 @@ func (a actorResolver) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.Publ
 	return act, &act.PublicKey, nil
 }
 
+// LoadActorFromKeyIRI retrieves the public key and tries to dereference the [vocab.Actor] it belongs
+// to.
+// The basic algorithm has been described here:
+// https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
 func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
 	var err error
 	if a.st == nil && a.c == nil {
 		return &AnonymousActor, nil, nil
 	}
 
-	var it vocab.Item = &AnonymousActor
+	act := &AnonymousActor
+	var key *vocab.PublicKey
 
-	if a.iriIsLocal(iri) && a.st != nil {
-		return a.loadFromStorage(iri)
+	// NOTE(marius): first try to load from local storage
+	act, key, err = a.loadFromStorage(iri)
+	if err == nil && key != nil {
+		return act, key, nil
 	}
 
 	if a.c == nil {
 		return &AnonymousActor, nil, errors.Newf("nil client")
 	}
 
-	var key *vocab.PublicKey
-	// NOTE(marius): first we try to load the key as a public key
-	it, key, err = a.LoadRemoteKey(iri)
-	if err != nil {
-		it, err = a.c.LoadIRI(iri)
-		if err != nil {
-			return &AnonymousActor, nil, err
-		}
+	// NOTE(marius): then we try to load the IRI as a public key
+	act, key, err = a.LoadRemoteKey(iri)
+	if err == nil && key != nil {
+		return act, key, nil
 	}
 
-	var act *vocab.Actor
+	// NOTE(marius): if everything fails we try to load the IRI as an actor IRI
+	it, err := a.c.LoadIRI(iri)
+	if err != nil {
+		return &AnonymousActor, nil, err
+	}
+
 	err = vocab.OnActor(it, func(a *vocab.Actor) error {
 		act = a
 		key = &a.PublicKey
 		return nil
 	})
-	if err != nil {
-		return &AnonymousActor, nil, err
-	}
 
 	// TODO(marius): check that act.PublicKey matches the key we just loaded if it exists.
 	return act, key, err
@@ -140,6 +146,9 @@ func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.Public
 		return nil, nil, err
 	}
 
+	// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
+	// that we can use both key.Owner or key.Controller, however we don't have Controller
+	// in the PublicKey struct. We should probably change that.
 	it, err := a.c.LoadIRI(key.Owner)
 	if err != nil {
 		return nil, key, err
