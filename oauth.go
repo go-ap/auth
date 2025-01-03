@@ -11,17 +11,22 @@ type OptionFn func(s *Server) error
 
 func WithIRI(i ...vocab.IRI) OptionFn {
 	return func(s *Server) error {
+		if s.localURLs == nil {
+			s.localURLs = make(vocab.IRIs, 0)
+		}
 		s.localURLs = i
 		return nil
 	}
 }
 
-func WithURL(u string) OptionFn {
+func WithURL(uu ...string) OptionFn {
 	return func(s *Server) error {
 		if s.localURLs == nil {
 			s.localURLs = make(vocab.IRIs, 0)
 		}
-		s.localURLs = append(s.localURLs, vocab.IRI(u))
+		for _, u := range uu {
+			s.localURLs = append(s.localURLs, vocab.IRI(u))
+		}
 		return nil
 	}
 }
