@@ -6,7 +6,7 @@ require (
 	git.sr.ht/~mariusor/lw v0.0.0-20241117105956-4b4009e28502
 	git.sr.ht/~mariusor/mask v0.0.0-20240327084502-ef2a9438457e
 	github.com/go-ap/activitypub v0.0.0-20241228090954-75890bd9cfda
-	github.com/go-ap/client v0.0.0-20250102135410-6810e9e24a62
+	github.com/go-ap/client v0.0.0-20250103161204-b38446bde73b
 	github.com/go-ap/errors v0.0.0-20241212155021-5a598b6bf467
 	github.com/go-ap/filters v0.0.0-20241228091325-b92f78983bb6
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73
