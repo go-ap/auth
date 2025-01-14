@@ -204,7 +204,7 @@ func getAuthorization(hdr string) (string, string) {
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
+func (s *Server) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (vocab.Actor, error) {
 	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
 	var st oauthStore
 	if s.Server != nil && s.Server.Storage != nil {
@@ -221,6 +221,9 @@ func (s *Server) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
 	var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
 		s.l.WithContext(ctx).Debugf(msg, p...)
 	}
-	ar := ClientResolver(s.cl, SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn))
+	ar := ClientResolver(s.cl,
+		SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn),
+		SolverWithIgnoreList(toIgnore...),
+	)
 	return ar.LoadActorFromRequest(r)
 }

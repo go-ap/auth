@@ -22,6 +22,7 @@ type Client interface {
 type actorResolver struct {
 	baseURL    string
 	iriIsLocal func(vocab.IRI) bool
+	ignore     vocab.IRIs
 	c          Client
 	st         readStore
 	l          LoggerFn
@@ -33,7 +34,12 @@ func ClientResolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
 		fn(&s)
 	}
 	return s
+}
 
+func SolverWithIgnoreList(iris ...vocab.IRI) func(resolver *actorResolver) {
+	return func(resolver *actorResolver) {
+		resolver.ignore = iris
+	}
 }
 
 func SolverWithLocalIRIFn(fn func(vocab.IRI) bool) func(*actorResolver) {
@@ -52,6 +58,17 @@ func SolverWithStorage(s oauthStore) func(*actorResolver) {
 	return func(resolver *actorResolver) {
 		resolver.st = s
 	}
+}
+
+// iriIsIgnored this checks if the incoming iri belongs to any of the hosts/instances/iris in the
+// ignored list.
+func (a actorResolver) iriIsIgnored(iri vocab.IRI) bool {
+	for _, i := range a.ignore {
+		if iri.Contains(i, false) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a actorResolver) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
@@ -84,6 +101,9 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 	var err error
 	if a.st == nil && a.c == nil {
 		return &AnonymousActor, nil, nil
+	}
+	if a.iriIsIgnored(iri) {
+		return &AnonymousActor, nil, errors.Newf("actor is blocked")
 	}
 
 	act := &AnonymousActor
