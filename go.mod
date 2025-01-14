@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20241117105956-4b4009e28502
-	git.sr.ht/~mariusor/mask v0.0.0-20240327084502-ef2a9438457e
+	git.sr.ht/~mariusor/mask v0.0.0-20250114195353-98705a6977b7
 	github.com/go-ap/activitypub v0.0.0-20250112165501-7b898763a1e9
 	github.com/go-ap/client v0.0.0-20250112171502-daf7a388c2cc
 	github.com/go-ap/errors v0.0.0-20241212155021-5a598b6bf467
