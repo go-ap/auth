@@ -103,7 +103,7 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 		return &AnonymousActor, nil, nil
 	}
 	if a.iriIsIgnored(iri) {
-		return &AnonymousActor, nil, errors.Newf("actor is blocked")
+		return &AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
 	}
 
 	act := &AnonymousActor

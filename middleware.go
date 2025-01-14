@@ -55,6 +55,9 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 
 	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
 	if act, key, err = k.loadActorFromKeyFn(iri); err != nil {
+		if errors.IsForbidden(err) {
+			return nil, err
+		}
 		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
 	if vocab.IsNil(act) {
