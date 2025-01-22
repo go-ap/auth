@@ -76,6 +76,15 @@ func (a actorResolver) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.Publ
 		return &AnonymousActor, nil, errors.Newf("nil storage")
 	}
 
+	u, err := iri.URL()
+	if err != nil {
+		return &AnonymousActor, nil, errors.Annotatef(err, "invalid URL to load")
+	}
+	if u.Fragment != "" {
+		u.Fragment = ""
+		iri = vocab.IRI(u.String())
+	}
+
 	// NOTE(marius): in the case of the locally saved actors, we don't have *YET* public keys stored
 	// as independent objects.
 	// Therefore, there's no need to check if the IRI belongs to a Key object, and if that's the case
