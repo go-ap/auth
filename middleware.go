@@ -172,11 +172,10 @@ func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
 	}
 	algos := compatibleVerifyAlgorithms(k)
 	for _, algo := range algos {
-		if err := v.Verify(k, algo); err != nil {
-			keyGetter.logFn(nil, "Unable to verify request with %s %T: %+s", algo, k, err)
-		} else {
+		if err = v.Verify(k, algo); err == nil {
 			return nil
 		}
+		keyGetter.logFn(nil, "Unable to verify request with %s %T: %+s", algo, k, err)
 	}
 	return errors.Newf("unable to verify HTTP Signature with any of the attempted algorithms: %v", algos)
 }
