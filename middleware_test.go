@@ -111,31 +111,42 @@ func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
 	return string(pem.EncodeToMemory(&p))
 }
 
-func keyAndActor(base string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		k := vocab.PublicKey{
+func mockActor(base string) *vocab.Actor {
+	return &vocab.Actor{
+		ID:   vocab.IRI(base + "/jdoe"),
+		Type: vocab.PersonType,
+		PublicKey: vocab.PublicKey{
 			ID:           vocab.IRI(base + "/jdoe#main"),
 			Owner:        vocab.IRI(base + "/jdoe"),
 			PublicKeyPem: pemEncodePublicKey(prv),
-		}
-		actor := vocab.Actor{
-			ID:        vocab.IRI(base + "/jdoe"),
-			Type:      vocab.PersonType,
-			PublicKey: k,
-		}
+		},
+	}
+}
 
-		payload, _ := jsonld.Marshal(actor)
-		if filepath.Base(r.URL.Path) == "key" {
-			k.ID = vocab.IRI(base + "/jdoe/key")
-			payload, _ = jsonld.Marshal(k)
-		}
+func mockKeyAndActorHandler(base string) http.Handler {
+	cnt := 0
+	actor := mockActor(base)
 
-		w.WriteHeader(http.StatusOK)
-		w.Write(payload)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload []byte
+		status := http.StatusNotModified
+		if cnt == 0 {
+			payload, _ = jsonld.Marshal(actor)
+			if filepath.Base(r.URL.Path) == "key" {
+				actor.PublicKey.ID = vocab.IRI(base + "/jdoe/key")
+				payload, _ = jsonld.Marshal(actor.PublicKey)
+			}
+			status = http.StatusOK
+			w.Header().Set("Cache-Control", "public")
+		}
+		cnt++
+
+		w.WriteHeader(status)
+		_, _ = w.Write(payload)
 	})
 }
 
-var srv, _ = testServerWithURL(keyAndActor)
+var srv, _ = testServerWithURL(mockKeyAndActorHandler)
 
 func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, error) {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")

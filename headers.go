@@ -157,7 +157,10 @@ func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.Public
 		return nil, nil, err
 	}
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusGone {
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusGone, http.StatusNotModified:
+		// OK
+	default:
 		return nil, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
 	}
 
