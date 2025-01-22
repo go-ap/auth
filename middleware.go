@@ -12,12 +12,12 @@ import (
 	"net/http"
 	"strings"
 
+	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
-	"git.sr.ht/~mariusor/lw"
 )
 
 var AnonymousActor = vocab.Actor{
@@ -54,7 +54,7 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	var key *vocab.PublicKey
 
 	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
-	if act, key, err = k.loadActorFromKeyFn(iri); err != nil {
+	if act, key, err = k.loadActorFromKeyFn(iri); err != nil && !errors.IsNotModified(err) {
 		if errors.IsForbidden(err) {
 			return nil, err
 		}
