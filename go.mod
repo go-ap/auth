@@ -6,9 +6,9 @@ require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250114195945-ba9c7bcca3c1
 	git.sr.ht/~mariusor/mask v0.0.0-20250114195353-98705a6977b7
 	github.com/go-ap/activitypub v0.0.0-20250124194921-d52b4c694e14
-	github.com/go-ap/client v0.0.0-20250124203935-c85d69be5705
+	github.com/go-ap/client v0.0.0-20250126153921-26e3111da3d7
 	github.com/go-ap/errors v0.0.0-20250124135319-3da8adefd4a9
-	github.com/go-ap/filters v0.0.0-20250124201430-3eab6e3d69dc
+	github.com/go-ap/filters v0.0.0-20250126122444-86878f94a9e6
 	github.com/go-ap/jsonld v0.0.0-20221030091449-f2a191312c73
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f

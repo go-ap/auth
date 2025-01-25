@@ -173,23 +173,29 @@ func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.Public
 		return nil, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
 	}
 
+
 	key := new(vocab.PublicKey)
-	if err = jsonld.Unmarshal(body, key); err != nil {
-		return nil, nil, err
+	act := new(vocab.Actor)
+	if err = jsonld.Unmarshal(body, act); err != nil {
+		if err = jsonld.Unmarshal(body, key); err != nil {
+			return nil, nil, err
+		}
+
+		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
+		// that we can use both key.Owner or key.Controller, however we don't have Controller
+		// in the PublicKey struct. We should probably change that.
+		it, err := a.c.LoadIRI(key.Owner)
+		if err != nil {
+			return nil, key, err
+		}
+
+		if act, err = vocab.ToActor(it); err != nil {
+			return nil, key, err
+		}
+	} else {
+		key = &act.PublicKey
 	}
 
-	// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
-	// that we can use both key.Owner or key.Controller, however we don't have Controller
-	// in the PublicKey struct. We should probably change that.
-	it, err := a.c.LoadIRI(key.Owner)
-	if err != nil {
-		return nil, key, err
-	}
-
-	act, err := vocab.ToActor(it)
-	if err != nil {
-		return nil, key, err
-	}
 	return act, key, nil
 
 }
@@ -212,38 +218,43 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
 	var header string
-	if auth := r.Header.Get("Signature"); auth != "" {
-		header = auth
+	var typ string
+	var auth string
 
+	if auth = r.Header.Get("Signature"); auth != "" {
+		typ = "Signature"
+		header = auth
+	} else if auth = r.Header.Get("Authorization"); auth != "" {
+		header = auth
+		typ, auth = getAuthorization(header)
+	}
+	if typ == "" {
+		return acct, nil
+	}
+
+
+	switch typ {
+	case "Bearer":
+		// check OAuth2(plain) Bearer if present
+		method = "OAuth2"
+		storage, ok := a.st.(oauthStore)
+		if ok {
+			logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
+			v := oauthLoader{acc: &acct, s: storage}
+			v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
+			if err, challenge = v.Verify(r); err == nil {
+				acct = *v.acc
+			}
+		}
+	case "Signature":
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, loadActorFromKeyFn: a.LoadActorFromKeyIRI}
 		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 		method = "HTTP-Sig"
-		getter.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
+		getter.logFn = a.l
 
 		if err = verifyHTTPSignature(r, &getter); err == nil {
 			acct = *getter.acc
-		}
-	}
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		header = auth
-		typ, auth := getAuthorization(header)
-		if typ == "" {
-			return acct, nil
-		}
-
-		if typ == "Bearer" {
-			// check OAuth2(plain) Bearer if present
-			method = "OAuth2"
-			storage, ok := a.st.(oauthStore)
-			if ok {
-				logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-				v := oauthLoader{acc: &acct, s: storage}
-				v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
-				if err, challenge = v.Verify(r); err == nil {
-					acct = *v.acc
-				}
-			}
 		}
 	}
 
