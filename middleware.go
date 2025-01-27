@@ -66,7 +66,6 @@ func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
 	if !vocab.IsObject(act) {
 		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
 	}
-	k.logFn(nil, "response received: %+s", act)
 	k.acc = act
 
 	if key == nil {
@@ -175,7 +174,6 @@ func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
 		if err = v.Verify(k, algo); err == nil {
 			return nil
 		}
-		keyGetter.logFn(nil, "Unable to verify request with %s %T: %+s", algo, k, err)
 	}
 	return errors.Newf("unable to verify HTTP Signature with any of the attempted algorithms: %v", algos)
 }
