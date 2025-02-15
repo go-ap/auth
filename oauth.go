@@ -76,3 +76,8 @@ func New(optFns ...OptionFn) (*Server, error) {
 	}
 	return s, nil
 }
+
+type Metadata struct {
+	Pw         []byte `jsonld:"pw,omitempty"`
+	PrivateKey []byte `jsonld:"key,omitempty"`
+}
