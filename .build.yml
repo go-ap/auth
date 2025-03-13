@@ -12,5 +12,3 @@ tasks:
   - coverage: |
       set -a +x
       cd auth && make coverage
-      GIT_SHA=$(git rev-parse --verify HEAD)
-      GIT_BRANCH=$(git name-rev --name-only HEAD)
