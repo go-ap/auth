@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	log "git.sr.ht/~mariusor/lw"
 	"git.sr.ht/~mariusor/mask"
@@ -14,8 +16,8 @@ import (
 )
 
 type Client interface {
-	Get(url string) (*http.Response, error)
-	LoadIRI(vocab.IRI) (vocab.Item, error)
+	CtxGet(context.Context, string) (*http.Response, error)
+	CtxLoadIRI(context.Context, vocab.IRI) (vocab.Item, error)
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
@@ -128,14 +130,17 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 		return &AnonymousActor, nil, errors.Newf("nil client")
 	}
 
+	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
+	defer cancelFn()
+
 	// NOTE(marius): then we try to load the IRI as a public key
-	act, key, err = a.LoadRemoteKey(iri)
+	act, key, err = a.LoadRemoteKey(ctx, iri)
 	if err == nil && key != nil {
 		return act, key, nil
 	}
 
 	// NOTE(marius): if everything fails we try to load the IRI as an actor IRI
-	it, err := a.c.LoadIRI(iri)
+	it, err := a.c.CtxLoadIRI(ctx, iri)
 	if err != nil {
 		return &AnonymousActor, nil, err
 	}
@@ -150,9 +155,11 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 	return act, key, err
 }
 
+var DefaultKeyWaitLoadTime = 200 * time.Millisecond
+
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
-	resp, err := a.c.Get(iri.String())
+func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
+	resp, err := a.c.CtxGet(ctx, iri.String())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,7 +180,6 @@ func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.Public
 		return nil, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
 	}
 
-
 	key := new(vocab.PublicKey)
 	act := new(vocab.Actor)
 	if err = jsonld.Unmarshal(body, act); err != nil {
@@ -181,10 +187,13 @@ func (a actorResolver) LoadRemoteKey(iri vocab.IRI) (*vocab.Actor, *vocab.Public
 			return nil, nil, err
 		}
 
+		ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
+		defer cancelFn()
+
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
-		it, err := a.c.LoadIRI(key.Owner)
+		it, err := a.c.CtxLoadIRI(ctx, key.Owner)
 		if err != nil {
 			return nil, key, err
 		}
@@ -232,7 +241,6 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		return acct, nil
 	}
 
-
 	switch typ {
 	case "Bearer":
 		// check OAuth2(plain) Bearer if present
@@ -274,15 +282,18 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		a.l(logCtx, "Invalid HTTP Authorization")
 		return acct, err
 	}
-	// TODO(marius): Add actor'a host to the logging
+
 	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
-		u, _ := acct.GetID().URL()
 		logCtx["auth"] = method
-		logCtx["instance"] = u.Host
 		logCtx["id"] = acct.GetID()
 		logCtx["type"] = acct.GetType()
-		logCtx["name"] = acct.Name.String()
-		a.l(logCtx, "loaded Actor from Authorization header")
+		if name := vocab.NameOf(acct); len(name) > 0 {
+			logCtx["name"] = name
+		}
+		if u, err := acct.GetID().URL(); err == nil {
+			logCtx["instance"] = u.Host
+		}
+		a.l(logCtx, "Loaded Actor from Authorization header")
 	}
 	return acct, nil
 }
