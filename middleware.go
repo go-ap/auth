@@ -160,22 +160,26 @@ func (k *oauthLoader) Verify(r *http.Request) (error, string) {
 	return nil, ""
 }
 
-func verifyHTTPSignature(r *http.Request, keyGetter *keyLoader) error {
+func verifyHTTPSignature(r *http.Request, k *keyLoader) error {
 	v, err := httpsig.NewVerifier(r)
 	if err != nil {
 		return errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
 	}
-	k, err := keyGetter.GetKey(v.KeyId())
+
+	pk, err := k.GetKey(v.KeyId())
 	if err != nil {
 		return errors.Annotatef(err, "unable to load public key based on signature")
 	}
-	algos := compatibleVerifyAlgorithms(k)
-	for _, algo := range algos {
-		if err = v.Verify(k, algo); err == nil {
+
+	algs := compatibleVerifyAlgorithms(pk)
+	errs := make([]error, 0, len(algs))
+	for _, algo := range algs {
+		if err = v.Verify(pk, algo); err == nil {
 			return nil
 		}
+		errs = append(errs, fmt.Errorf("%s: %w", algo, err))
 	}
-	return errors.Newf("unable to verify HTTP Signature with any of the attempted algorithms: %v", algos)
+	return errors.Annotatef(errors.Join(errs...), "unable to verify HTTP Signature with any of the attempted algorithms")
 }
 
 func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {

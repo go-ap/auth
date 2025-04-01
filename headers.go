@@ -155,7 +155,7 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 	return act, key, err
 }
 
-var DefaultKeyWaitLoadTime = 200 * time.Millisecond
+var DefaultKeyWaitLoadTime = 2 * time.Second
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
 func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
@@ -187,9 +187,6 @@ func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab
 			return nil, nil, err
 		}
 
-		ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
-		defer cancelFn()
-
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
@@ -206,7 +203,6 @@ func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab
 	}
 
 	return act, key, nil
-
 }
 
 // LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
@@ -247,7 +243,6 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		method = "OAuth2"
 		storage, ok := a.st.(oauthStore)
 		if ok {
-			logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 			v := oauthLoader{acc: &acct, s: storage}
 			v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
 			if err, challenge = v.Verify(r); err == nil {
@@ -257,7 +252,6 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 	case "Signature":
 		// verify HTTP-Signature if present
 		getter := keyLoader{acc: &acct, loadActorFromKeyFn: a.LoadActorFromKeyIRI}
-		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 		method = "HTTP-Sig"
 		getter.logFn = a.l
 
@@ -266,13 +260,11 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		}
 	}
 
-	if header == "" {
-		return acct, nil
-	}
 	if err != nil {
 		// TODO(marius): fix this challenge passing
 		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
 		logCtx["err"] = err.Error()
+		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
 		if id := acct.GetID(); id.IsValid() {
 			logCtx["id"] = id
 		}
