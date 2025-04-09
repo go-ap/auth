@@ -123,6 +123,7 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 	// NOTE(marius): first try to load from local storage
 	act, key, err = a.loadFromStorage(iri)
 	if err == nil && key != nil {
+		a.l(log.Ctx{"key": strings.ReplaceAll(key.PublicKeyPem, "\n", ""), "iri": act.ID}, "found local key and actor")
 		return act, key, nil
 	}
 
@@ -151,6 +152,7 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 		return nil
 	})
 
+	a.l(log.Ctx{"key": strings.ReplaceAll(key.PublicKeyPem, "\n", ""), "iri": act.ID}, "loaded remote public key and actor")
 	// TODO(marius): check that act.PublicKey matches the key we just loaded if it exists.
 	return act, key, err
 }
