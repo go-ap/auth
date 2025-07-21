@@ -18,6 +18,7 @@ import (
 	"github.com/go-ap/filters"
 	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
+	"golang.org/x/oauth2"
 )
 
 var AnonymousActor = vocab.Actor{
@@ -88,6 +89,38 @@ type oauthLoader struct {
 	logFn LoggerFn
 	acc   *vocab.Actor
 	s     oauthStore
+}
+
+func LoadActorFromOAuthToken(storage oauthStore, tok *oauth2.Token) (vocab.Actor, error) {
+	var acc = AnonymousActor
+	dat, err := storage.LoadAccess(tok.AccessToken)
+	if err != nil {
+		return acc, err
+	}
+	if dat == nil || dat.UserData == nil {
+		return acc, errors.NotFoundf("unable to load bearer")
+	}
+	if iri, err := assertToBytes(dat.UserData); err == nil {
+		it, err := storage.Load(vocab.IRI(iri))
+		if err != nil {
+			return acc, unauthorized(err)
+		}
+		if vocab.IsNil(it) {
+			return acc, unauthorized(err)
+		}
+		if it, err = firstOrItem(it); err != nil {
+			return acc, unauthorized(err)
+		}
+		err = vocab.OnActor(it, func(act *vocab.Actor) error {
+			acc = *act
+			return nil
+		})
+		if err != nil {
+			return acc, unauthorized(err)
+		}
+	}
+	return acc, nil
+
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
