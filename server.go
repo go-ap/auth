@@ -33,7 +33,7 @@ const ID = osin.AuthorizeRequestType("id")
 
 var (
 	DefaultAuthorizeTypes = osin.AllowedAuthorizeType{osin.CODE, osin.TOKEN, ID}
-	DefaultAccessTypes    = osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, osin.CLIENT_CREDENTIALS}
+	DefaultAccessTypes    = osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, osin.CLIENT_CREDENTIALS, osin.IMPLICIT}
 
 	DefaultConfig = osin.ServerConfig{
 		AuthorizationExpiration:   86400,
