@@ -7,8 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/go-ap/client"
-	"github.com/go-ap/jsonld"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +14,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/go-ap/client"
+	"github.com/go-ap/jsonld"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
@@ -95,7 +96,7 @@ func isNotLocal(_ vocab.IRI) bool {
 	return false
 }
 
-var prv, _ = rsa.GenerateKey(rand.Reader, 512)
+var prv, _ = rsa.GenerateKey(rand.Reader, 1024)
 
 func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
 	pubKey := prvKey.PublicKey
