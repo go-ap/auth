@@ -5,10 +5,10 @@ go 1.24.0
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
 	git.sr.ht/~mariusor/mask v0.0.0-20250114195353-98705a6977b7
-	github.com/go-ap/activitypub v0.0.0-20250924114144-2429ef373dc3
-	github.com/go-ap/client v0.0.0-20250924114747-60d900e2a785
+	github.com/go-ap/activitypub v0.0.0-20251001083933-784b40c638ca
+	github.com/go-ap/client v0.0.0-20251003135455-d90c287a7868
 	github.com/go-ap/errors v0.0.0-20250905102357-4480b47a00c4
-	github.com/go-ap/filters v0.0.0-20250924114310-9ddada298f9d
+	github.com/go-ap/filters v0.0.0-20251003135225-aafe07461701
 	github.com/go-ap/jsonld v0.0.0-20250905102310-8480b0fe24d9
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
