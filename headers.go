@@ -28,9 +28,8 @@ type actorResolver struct {
 	c          Client
 	st         readStore
 	l          LoggerFn
+	act        *vocab.Actor
 }
-
-func ClientResolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
 
 func Resolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
 	s := actorResolver{c: cl}
@@ -125,7 +124,7 @@ func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.
 	// NOTE(marius): first try to load from local storage
 	act, key, err = a.loadFromStorage(iri)
 	if err == nil && key != nil {
-		a.l(log.Ctx{"key": strings.ReplaceAll(key.PublicKeyPem, "\n", ""), "iri": act.ID}, "found local key and actor")
+		a.l(log.Ctx{"key": mask.S(key.PublicKeyPem), "iri": act.ID}, "found local key and actor")
 		return act, key, nil
 	}
 
@@ -209,18 +208,23 @@ func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab
 	return act, key, nil
 }
 
-// LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
+func (a *actorResolver) Actor() vocab.Actor {
+	if a.act == nil {
+		return AnonymousActor
+	}
+	return *a.act
+}
+
+// Verify reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error) {
-	acct := AnonymousActor
-	var challenge string
-	var err error
+func (a *actorResolver) Verify(r *http.Request) error {
+
 	method := "none"
 	if r == nil || r.Header == nil {
-		return acct, nil
+		return nil
 	}
 
 	logCtx := log.Ctx{}
@@ -238,58 +242,58 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		typ, auth = getAuthorization(header)
 	}
 	if typ == "" {
-		return acct, nil
+		return nil
 	}
 
+	var err error
 	switch typ {
 	case "Bearer":
 		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
 		storage, ok := a.st.(oauthStore)
 		if ok {
-			v := oauthLoader{acc: &acct, s: storage}
+			v := oauthLoader{acc: a.act, s: storage}
 			v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
 			if err = v.Verify(r); err == nil {
-				acct = v.Actor()
+				act := v.Actor()
+				a.act = &act
 			}
 		}
 	case "Signature":
 		// verify HTTP-Signature if present
-		getter := keyLoader{acc: &acct, loadActorFromKeyFn: a.LoadActorFromKeyIRI}
+		getter := keyLoader{acc: a.act, loadActorFromKeyFn: a.LoadActorFromKeyIRI}
 		method = "HTTP-Sig"
 		getter.logFn = a.l
 
 		if err = getter.Verify(r); err == nil {
-			acct = getter.Actor()
+			act := getter.Actor()
+			a.act = &act
 		}
 	}
 
+	act := a.Actor()
 	if err != nil {
-		// TODO(marius): fix this challenge passing
-		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(challenge)
+		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(method)
 		logCtx["err"] = err.Error()
 		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-		if id := acct.GetID(); id.IsValid() {
+		if id := act.GetID(); !vocab.PublicNS.Equals(id, true) {
 			logCtx["id"] = id
 		}
-		if challenge != "" {
-			logCtx["challenge"] = challenge
-		}
 		a.l(logCtx, "Invalid HTTP Authorization")
-		return acct, err
+		return err
 	}
 
-	if !acct.GetID().Equals(AnonymousActor.GetID(), true) {
+	if !act.GetID().Equals(AnonymousActor.GetID(), true) {
 		logCtx["auth"] = method
-		logCtx["id"] = acct.GetID()
-		logCtx["type"] = acct.GetType()
-		if name := vocab.NameOf(acct); len(name) > 0 {
+		logCtx["id"] = act.GetID()
+		logCtx["type"] = act.GetType()
+		if name := vocab.NameOf(a.act); len(name) > 0 {
 			logCtx["name"] = name
 		}
-		if u, err := acct.GetID().URL(); err == nil {
+		if u, err := act.GetID().URL(); err == nil {
 			logCtx["instance"] = u.Host
 		}
 		a.l(logCtx, "Loaded Actor from Authorization header")
 	}
-	return acct, nil
+	return nil
 }

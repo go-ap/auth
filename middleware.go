@@ -276,5 +276,7 @@ func (s *Server) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (v
 		SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn),
 		SolverWithIgnoreList(toIgnore...),
 	)
-	return ar.LoadActorFromRequest(r)
+
+	err := ar.Verify(r)
+	return ar.Actor(), err
 }
