@@ -31,6 +31,8 @@ type actorResolver struct {
 }
 
 func ClientResolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
+
+func Resolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
 	s := actorResolver{c: cl}
 	for _, fn := range initFns {
 		fn(&s)
@@ -247,8 +249,8 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		if ok {
 			v := oauthLoader{acc: &acct, s: storage}
 			v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
-			if err, challenge = v.Verify(r); err == nil {
-				acct = *v.acc
+			if err = v.Verify(r); err == nil {
+				acct = v.Actor()
 			}
 		}
 	case "Signature":
@@ -257,8 +259,8 @@ func (a actorResolver) LoadActorFromRequest(r *http.Request) (vocab.Actor, error
 		method = "HTTP-Sig"
 		getter.logFn = a.l
 
-		if err = verifyHTTPSignature(r, &getter); err == nil {
-			acct = *getter.acc
+		if err = getter.Verify(r); err == nil {
+			acct = getter.Actor()
 		}
 	}
 

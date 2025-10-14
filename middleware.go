@@ -157,43 +157,57 @@ func assertToBytes(in interface{}) ([]byte, error) {
 	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
 }
 
-func (k *oauthLoader) Verify(r *http.Request) (error, string) {
+func (k *oauthLoader) Actor() vocab.Actor {
+	if k.acc == nil {
+		return AnonymousActor
+	}
+	return *k.acc
+}
+
+func (k *oauthLoader) Verify(r *http.Request) error {
 	bearer := osin.CheckBearerAuth(r)
 	if bearer == nil {
-		return errors.BadRequestf("could not load bearer token from request"), ""
+		return errors.BadRequestf("could not load bearer token from request")
 	}
 	dat, err := k.s.LoadAccess(bearer.Code)
 	if err != nil {
-		return err, ""
+		return err
 	}
 	if dat == nil || dat.UserData == nil {
-		return errors.NotFoundf("unable to load bearer"), ""
+		return errors.NotFoundf("unable to load bearer")
 	}
 	if iri, err := assertToBytes(dat.UserData); err == nil {
 		it, err := k.s.Load(vocab.IRI(iri))
 		if err != nil {
-			return unauthorized(err), ""
+			return unauthorized(err)
 		}
 		if vocab.IsNil(it) {
-			return unauthorized(err), ""
+			return unauthorized(err)
 		}
 		if it, err = firstOrItem(it); err != nil {
-			return unauthorized(err), ""
+			return unauthorized(err)
 		}
 		err = vocab.OnActor(it, func(act *vocab.Actor) error {
 			k.acc = act
 			return nil
 		})
 		if err != nil {
-			return unauthorized(err), ""
+			return unauthorized(err)
 		}
 	} else {
-		return errors.Unauthorizedf("unable to load from bearer"), ""
+		return errors.Unauthorizedf("unable to load from bearer")
 	}
-	return nil, ""
+	return nil
 }
 
-func verifyHTTPSignature(r *http.Request, k *keyLoader) error {
+func (k *keyLoader) Actor() vocab.Actor {
+	if k.acc == nil {
+		return AnonymousActor
+	}
+	return *k.acc
+}
+
+func (k *keyLoader) Verify(r *http.Request) error {
 	v, err := httpsig.NewVerifier(r)
 	if err != nil {
 		return errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
@@ -258,7 +272,7 @@ func (s *Server) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (v
 	var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
 		s.l.WithContext(ctx).Debugf(msg, p...)
 	}
-	ar := ClientResolver(s.cl,
+	ar := Resolver(s.cl,
 		SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn),
 		SolverWithIgnoreList(toIgnore...),
 	)
