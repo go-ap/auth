@@ -5,11 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	log "git.sr.ht/~mariusor/lw"
-	"git.sr.ht/~mariusor/mask"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
@@ -20,149 +17,67 @@ type Client interface {
 	CtxLoadIRI(context.Context, vocab.IRI) (vocab.Item, error)
 }
 
-// actorResolver is a used for resolving actors either in local storage or remotely
-type actorResolver struct {
+type config struct {
 	baseURL    string
-	iriIsLocal func(vocab.IRI) bool
 	ignore     vocab.IRIs
 	c          Client
-	st         readStore
-	l          LoggerFn
-	act        *vocab.Actor
+	st         oauthStore
+	logFn      LoggerFn
+	iriIsLocal func(vocab.IRI) bool
 }
 
-func Resolver(cl Client, initFns ...func(*actorResolver)) actorResolver {
-	s := actorResolver{c: cl}
+// actorResolver is a used for resolving actors either in local storage or remotely
+type actorResolver struct {
+	config
+	act *vocab.Actor
+}
+
+// ActorVerifier verifies if a [http.Request] contains information about an ActivityPub [vocab.Actor]
+// that has operated it.
+type ActorVerifier interface {
+	// Verify validates a request for the existence of an authorized ActivityPub [vocab.Actor] that has
+	// operated it.
+	Verify(*http.Request) (vocab.Actor, error)
+}
+
+func Resolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
+	c := config{c: cl}
 	for _, fn := range initFns {
-		fn(&s)
+		fn(&c)
 	}
-	return s
+	s := actorResolver{config: c}
+	return &s
 }
 
-func SolverWithIgnoreList(iris ...vocab.IRI) func(resolver *actorResolver) {
-	return func(resolver *actorResolver) {
-		resolver.ignore = iris
-	}
-}
+type SolverInitFn = func(*config)
 
-func SolverWithLocalIRIFn(fn func(vocab.IRI) bool) func(*actorResolver) {
-	return func(resolver *actorResolver) {
-		resolver.iriIsLocal = fn
+func SolverWithIgnoreList(iris ...vocab.IRI) SolverInitFn {
+	return func(conf *config) {
+		conf.ignore = iris
 	}
 }
 
-func SolverWithLogger(l LoggerFn) func(*actorResolver) {
-	return func(resolver *actorResolver) {
-		resolver.l = l
+func SolverWithLocalIRIFn(fn func(vocab.IRI) bool) SolverInitFn {
+	return func(conf *config) {
+		conf.iriIsLocal = fn
 	}
 }
 
-func SolverWithStorage(s oauthStore) func(*actorResolver) {
-	return func(resolver *actorResolver) {
-		resolver.st = s
+func SolverWithLogger(l LoggerFn) SolverInitFn {
+	return func(conf *config) {
+		conf.logFn = l
 	}
 }
 
-// iriIsIgnored this checks if the incoming iri belongs to any of the hosts/instances/iris in the
-// ignored list.
-func (a actorResolver) iriIsIgnored(iri vocab.IRI) bool {
-	for _, i := range a.ignore {
-		if iri.Contains(i, false) {
-			return true
-		}
+func SolverWithStorage(s oauthStore) SolverInitFn {
+	return func(conf *config) {
+		conf.st = s
 	}
-	return false
 }
-
-func (a actorResolver) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
-	if a.st == nil {
-		return &AnonymousActor, nil, errors.Newf("nil storage")
-	}
-
-	u, err := iri.URL()
-	if err != nil {
-		return &AnonymousActor, nil, errors.Annotatef(err, "invalid URL to load")
-	}
-	if u.Fragment != "" {
-		u.Fragment = ""
-		iri = vocab.IRI(u.String())
-	}
-
-	// NOTE(marius): in the case of the locally saved actors, we don't have *YET* public keys stored
-	// as independent objects.
-	// Therefore, there's no need to check if the IRI belongs to a Key object, and if that's the case
-	// then dereference the owner, as we do in the remote case.
-	it, err := a.st.Load(iri)
-	if err != nil {
-		return &AnonymousActor, nil, err
-	}
-
-	act, err := vocab.ToActor(it)
-	if err != nil {
-		return act, nil, err
-	}
-
-	return act, &act.PublicKey, nil
-}
-
-// LoadActorFromKeyIRI retrieves the public key and tries to dereference the [vocab.Actor] it belongs
-// to.
-// The basic algorithm has been described here:
-// https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
-func (a actorResolver) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
-	var err error
-	if a.st == nil && a.c == nil {
-		return &AnonymousActor, nil, nil
-	}
-	if a.iriIsIgnored(iri) {
-		return &AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
-	}
-
-	act := &AnonymousActor
-	var key *vocab.PublicKey
-
-	// NOTE(marius): first try to load from local storage
-	act, key, err = a.loadFromStorage(iri)
-	if err == nil && key != nil {
-		a.l(log.Ctx{"key": mask.S(key.PublicKeyPem), "iri": act.ID}, "found local key and actor")
-		return act, key, nil
-	}
-
-	if a.c == nil {
-		return &AnonymousActor, nil, errors.Newf("nil client")
-	}
-
-	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
-	defer cancelFn()
-
-	// NOTE(marius): then we try to load the IRI as a public key
-	act, key, err = a.LoadRemoteKey(ctx, iri)
-	if err == nil && key != nil {
-		return act, key, nil
-	}
-
-	// NOTE(marius): if everything fails we try to load the IRI as an actor IRI
-	it, err := a.c.CtxLoadIRI(ctx, iri)
-	if err != nil {
-		return &AnonymousActor, nil, err
-	}
-
-	err = vocab.OnActor(it, func(a *vocab.Actor) error {
-		act = a
-		key = &a.PublicKey
-		return nil
-	})
-
-	a.l(log.Ctx{"key": strings.ReplaceAll(key.PublicKeyPem, "\n", ""), "iri": act.ID}, "loaded remote public key and actor")
-	// TODO(marius): check that act.PublicKey matches the key we just loaded if it exists.
-	return act, key, err
-}
-
-var DefaultKeyWaitLoadTime = 2 * time.Second
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
-	resp, err := a.c.CtxGet(ctx, iri.String())
+func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
+	resp, err := c.CtxGet(ctx, iri.String())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -193,7 +108,7 @@ func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
-		it, err := a.c.CtxLoadIRI(ctx, key.Owner)
+		it, err := c.CtxLoadIRI(ctx, key.Owner)
 		if err != nil {
 			return nil, key, err
 		}
@@ -208,28 +123,20 @@ func (a actorResolver) LoadRemoteKey(ctx context.Context, iri vocab.IRI) (*vocab
 	return act, key, nil
 }
 
-func (a *actorResolver) Actor() vocab.Actor {
-	if a.act == nil {
-		return AnonymousActor
-	}
-	return *a.act
-}
-
 // Verify reads the Authorization header of an HTTP request and tries to decode it either
 // an OAuth2 or HTTP Signatures:
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (a *actorResolver) Verify(r *http.Request) error {
-
-	method := "none"
+func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	if r == nil || r.Header == nil {
-		return nil
+		return AnonymousActor, nil
 	}
 
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
+	method := "none"
 	var header string
 	var typ string
 	var auth string
@@ -242,58 +149,19 @@ func (a *actorResolver) Verify(r *http.Request) error {
 		typ, auth = getAuthorization(header)
 	}
 	if typ == "" {
-		return nil
+		return AnonymousActor, nil
 	}
 
-	var err error
 	switch typ {
 	case "Bearer":
-		// check OAuth2(plain) Bearer if present
 		method = "OAuth2"
-		storage, ok := a.st.(oauthStore)
-		if ok {
-			v := oauthLoader{acc: a.act, s: storage}
-			v.logFn = a.l //.WithContext(log.Ctx{"from": method}).Debugf
-			if err = v.Verify(r); err == nil {
-				act := v.Actor()
-				a.act = &act
-			}
-		}
+		ol := oauthLoader{config: a.config}
+		return ol.Verify(r)
 	case "Signature":
-		// verify HTTP-Signature if present
-		getter := keyLoader{acc: a.act, loadActorFromKeyFn: a.LoadActorFromKeyIRI}
-		method = "HTTP-Sig"
-		getter.logFn = a.l
-
-		if err = getter.Verify(r); err == nil {
-			act := getter.Actor()
-			a.act = &act
-		}
+		method = "HTTP-Signature"
+		kl := keyLoader{act: a.act, config: a.config}
+		return kl.Verify(r)
 	}
 
-	act := a.Actor()
-	if err != nil {
-		err = errors.NewUnauthorized(err, "Unauthorized").Challenge(method)
-		logCtx["err"] = err.Error()
-		logCtx["header"] = strings.Replace(header, auth, mask.S(auth).String(), 1)
-		if id := act.GetID(); !vocab.PublicNS.Equals(id, true) {
-			logCtx["id"] = id
-		}
-		a.l(logCtx, "Invalid HTTP Authorization")
-		return err
-	}
-
-	if !act.GetID().Equals(AnonymousActor.GetID(), true) {
-		logCtx["auth"] = method
-		logCtx["id"] = act.GetID()
-		logCtx["type"] = act.GetType()
-		if name := vocab.NameOf(a.act); len(name) > 0 {
-			logCtx["name"] = name
-		}
-		if u, err := act.GetID().URL(); err == nil {
-			logCtx["instance"] = u.Host
-		}
-		a.l(logCtx, "Loaded Actor from Authorization header")
-	}
-	return nil
+	return AnonymousActor, errors.Unauthorizedf("Unauthorized").Challenge(method)
 }

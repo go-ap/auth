@@ -34,7 +34,7 @@ func WithURL(uu ...string) OptionFn {
 func WithStorage(st oauthStore) OptionFn {
 	if os, ok := st.(osin.Storage); ok {
 		return func(s *Server) error {
-			ss, err := NewServer(os, s.l)
+			ss, err := newServer(os, s.l)
 			if err != nil {
 				return err
 			}

@@ -5,9 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"net/http"
 	"strings"
@@ -38,57 +36,9 @@ type readStore interface {
 	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
 }
 
-type keyLoader struct {
-	loadActorFromKeyFn func(vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error)
-	logFn              LoggerFn
-	acc                *vocab.Actor
-}
-
-func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
-	iri := vocab.IRI(id)
-	_, err := iri.URL()
-	if err != nil {
-		return nil, err
-	}
-
-	var act *vocab.Actor
-	var key *vocab.PublicKey
-
-	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
-	if act, key, err = k.loadActorFromKeyFn(iri); err != nil && !errors.IsNotModified(err) {
-		if errors.IsForbidden(err) {
-			return nil, err
-		}
-		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
-	}
-	if vocab.IsNil(act) {
-		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
-	}
-	if !vocab.IsObject(act) {
-		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
-	}
-	k.acc = act
-
-	if key == nil {
-		return nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
-	}
-
-	block, _ := pem.Decode([]byte(key.PublicKeyPem))
-	if block == nil {
-		return nil, errors.Newf("failed to parse PEM block containing the public key")
-	}
-	return x509.ParsePKIXPublicKey(block.Bytes)
-}
-
 type oauthStore interface {
 	readStore
 	LoadAccess(token string) (*osin.AccessData, error)
-}
-
-type oauthLoader struct {
-	logFn LoggerFn
-	acc   *vocab.Actor
-	s     oauthStore
 }
 
 func LoadActorFromOAuthToken(storage oauthStore, tok *oauth2.Token) (vocab.Actor, error) {
@@ -120,7 +70,6 @@ func LoadActorFromOAuthToken(storage oauthStore, tok *oauth2.Token) (vocab.Actor
 		}
 	}
 	return acc, nil
-
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
@@ -155,78 +104,6 @@ func assertToBytes(in interface{}) ([]byte, error) {
 		return []byte(str.String()), nil
 	}
 	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
-}
-
-func (k *oauthLoader) Actor() vocab.Actor {
-	if k.acc == nil {
-		return AnonymousActor
-	}
-	return *k.acc
-}
-
-func (k *oauthLoader) Verify(r *http.Request) error {
-	bearer := osin.CheckBearerAuth(r)
-	if bearer == nil {
-		return errors.BadRequestf("could not load bearer token from request")
-	}
-	dat, err := k.s.LoadAccess(bearer.Code)
-	if err != nil {
-		return err
-	}
-	if dat == nil || dat.UserData == nil {
-		return errors.NotFoundf("unable to load bearer")
-	}
-	if iri, err := assertToBytes(dat.UserData); err == nil {
-		it, err := k.s.Load(vocab.IRI(iri))
-		if err != nil {
-			return unauthorized(err)
-		}
-		if vocab.IsNil(it) {
-			return unauthorized(err)
-		}
-		if it, err = firstOrItem(it); err != nil {
-			return unauthorized(err)
-		}
-		err = vocab.OnActor(it, func(act *vocab.Actor) error {
-			k.acc = act
-			return nil
-		})
-		if err != nil {
-			return unauthorized(err)
-		}
-	} else {
-		return errors.Unauthorizedf("unable to load from bearer")
-	}
-	return nil
-}
-
-func (k *keyLoader) Actor() vocab.Actor {
-	if k.acc == nil {
-		return AnonymousActor
-	}
-	return *k.acc
-}
-
-func (k *keyLoader) Verify(r *http.Request) error {
-	v, err := httpsig.NewVerifier(r)
-	if err != nil {
-		return errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
-	}
-
-	pk, err := k.GetKey(v.KeyId())
-	if err != nil {
-		return errors.Annotatef(err, "unable to load public key based on signature")
-	}
-
-	algs := compatibleVerifyAlgorithms(pk)
-	errs := make([]error, 0, len(algs))
-	for _, algo := range algs {
-		if err = v.Verify(pk, algo); err == nil {
-			return nil
-		}
-		errs = append(errs, fmt.Errorf("%s: %w", algo, err))
-	}
-	return errors.Annotatef(errors.Join(errs...), "unable to verify HTTP Signature with any of the attempted algorithms")
 }
 
 func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
@@ -277,6 +154,5 @@ func (s *Server) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (v
 		SolverWithIgnoreList(toIgnore...),
 	)
 
-	err := ar.Verify(r)
-	return ar.Actor(), err
+	return ar.Verify(r)
 }

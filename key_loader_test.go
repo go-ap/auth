@@ -15,13 +15,13 @@ func publicKey(id, owner vocab.IRI) *vocab.PublicKey {
 	}
 }
 
-func Test_actorResolver_LoadActorFromKeyIRI(t *testing.T) {
+func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 	type fields struct {
 		baseURL    string
 		iriIsLocal func(vocab.IRI) bool
 		ignore     vocab.IRIs
 		c          Client
-		st         readStore
+		st         oauthStore
 		l          LoggerFn
 	}
 	tests := []struct {
@@ -66,13 +66,15 @@ func Test_actorResolver_LoadActorFromKeyIRI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := actorResolver{
-				baseURL:    tt.fields.baseURL,
-				iriIsLocal: tt.fields.iriIsLocal,
-				ignore:     tt.fields.ignore,
-				c:          tt.fields.c,
-				st:         tt.fields.st,
-				l:          tt.fields.l,
+			a := keyLoader{
+				config: config{
+					baseURL:    tt.fields.baseURL,
+					iriIsLocal: tt.fields.iriIsLocal,
+					ignore:     tt.fields.ignore,
+					c:          tt.fields.c,
+					st:         tt.fields.st,
+					logFn:      tt.fields.l,
+				},
 			}
 			got, got1, err := a.LoadActorFromKeyIRI(tt.arg)
 			if (err != nil) != tt.wantErr {

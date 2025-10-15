@@ -50,7 +50,7 @@ var (
 	}
 )
 
-func NewServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
+func newServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
 	s := osin.NewServer(&DefaultConfig, store)
 
 	logFn := EmptyLogFn

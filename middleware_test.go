@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/go-ap/client"
+	"github.com/go-ap/filters"
 	"github.com/go-ap/jsonld"
 
 	"git.sr.ht/~mariusor/lw"
@@ -159,24 +160,45 @@ func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, err
 	return ts, nil
 }
 
+type mockStorage struct {
+	it   vocab.Item
+	data *osin.AccessData
+}
+
+func (m mockStorage) Load(iri vocab.IRI, check ...filters.Check) (vocab.Item, error) {
+	return m.it, nil
+}
+
+func (m mockStorage) LoadAccess(token string) (*osin.AccessData, error) {
+	return m.data, nil
+}
+
+func mockStore(it vocab.Item, access *osin.AccessData) mockStorage {
+	return mockStorage{
+		it:   it,
+		data: access,
+	}
+}
+
+var _ oauthStore = mockStorage{}
+
 func Test_keyLoader_GetKey(t *testing.T) {
-	loadActorFromKeyFn := (actorResolver{c: cl, l: logFn, iriIsLocal: isNotLocal}).LoadActorFromKeyIRI
 	tests := []struct {
 		name    string
 		arg     string
 		want    crypto.PublicKey
 		wantErr bool
 	}{
-		//{
-		//	name:    "empty",
-		//	wantErr: true,
-		//},
-		//{
-		//	name:    "remote key IRI as separate resource",
-		//	arg:     srv.URL + "/jdoe/key",
-		//	want:    prv.Public(),
-		//	wantErr: false,
-		//},
+		{
+			name:    "empty",
+			wantErr: true,
+		},
+		{
+			name:    "remote key IRI as separate resource",
+			arg:     srv.URL + "/jdoe/key",
+			want:    prv.Public(),
+			wantErr: false,
+		},
 		{
 			name:    "remote key IRI as actor resource",
 			arg:     srv.URL + "/jdoe#main",
@@ -187,8 +209,10 @@ func Test_keyLoader_GetKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := &keyLoader{
-				loadActorFromKeyFn: loadActorFromKeyFn,
-				logFn:              logFn,
+				config: config{
+					logFn: logFn,
+					st:    mockStore(mockActor(tt.arg), nil),
+				},
 			}
 			got, err := k.GetKey(tt.arg)
 			if (err != nil) != tt.wantErr {
