@@ -4,8 +4,8 @@ go 1.24.0
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
-	github.com/go-ap/activitypub v0.0.0-20251007131428-e3b22fbf6257
-	github.com/go-ap/client v0.0.0-20251015081206-edd80e9789d4
+	github.com/go-ap/activitypub v0.0.0-20251021115032-035023aa5f64
+	github.com/go-ap/client v0.0.0-20251021120056-8675aff74c01
 	github.com/go-ap/errors v0.0.0-20250905102357-4480b47a00c4
 	github.com/go-ap/filters v0.0.0-20251007131616-3481286d74d2
 	github.com/go-ap/jsonld v0.0.0-20250905102310-8480b0fe24d9
