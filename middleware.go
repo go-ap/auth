@@ -23,10 +23,7 @@ var AnonymousActor = vocab.Actor{
 	ID:   vocab.PublicNS,
 	Type: vocab.ActorType,
 	Name: vocab.NaturalLanguageValues{
-		vocab.LangRefValue{
-			Ref:   vocab.NilLangRef,
-			Value: vocab.Content("Anonymous"),
-		},
+		vocab.NilLangRef: vocab.Content("Anonymous"),
 	},
 }
 
