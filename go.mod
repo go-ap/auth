@@ -5,13 +5,13 @@ go 1.24.0
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
 	github.com/go-ap/activitypub v0.0.0-20251028130710-8bc6217f6c8d
-	github.com/go-ap/client v0.0.0-20251029092820-7694763217df
+	github.com/go-ap/client v0.0.0-20251112172340-641dcf1a65af
 	github.com/go-ap/errors v0.0.0-20250905102357-4480b47a00c4
 	github.com/go-ap/filters v0.0.0-20251107171832-f29304e3da0b
 	github.com/go-ap/jsonld v0.0.0-20250905102310-8480b0fe24d9
 	github.com/go-fed/httpsig v1.1.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
-	golang.org/x/oauth2 v0.32.0
+	golang.org/x/oauth2 v0.33.0
 )
 
 require (
@@ -32,8 +32,8 @@ require (
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
-	golang.org/x/crypto v0.43.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/crypto v0.44.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/neurosnap/sentences.v1 v1.0.7 // indirect
 )
