@@ -72,6 +72,13 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 		return AnonymousActor, errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
 	}
 
+	// NOTE(marius):
+	// This piece of logic returns a local copy of an actor if our storage has one.
+	// In certain cases like the remote actor was recreated, or modified without an Update,
+	// that copy is no longer fresh and key signature fails.
+	// I would like to have two code paths accessible from here:
+	//  * load local copy then try signature validation, if it fails
+	//  * load remote copy then try again signature validation
 	pk, err := k.GetKey(v.KeyId())
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
