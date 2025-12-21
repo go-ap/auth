@@ -15,10 +15,7 @@ import (
 	"github.com/go-fed/httpsig"
 )
 
-type keyLoader struct {
-	config
-	act *vocab.Actor
-}
+type keyLoader config
 
 // HTTPSignatureResolver returns a HTTP-Signature validator for loading f
 func HTTPSignatureResolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
@@ -26,44 +23,42 @@ func HTTPSignatureResolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
 	for _, fn := range initFns {
 		fn(&c)
 	}
-	kl := keyLoader{config: c}
+	kl := keyLoader(c)
 	return &kl
 }
 
-func (k *keyLoader) GetKey(id string) (crypto.PublicKey, error) {
+func (k *keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 	iri := vocab.IRI(id)
 	_, err := iri.URL()
 	if err != nil {
-		return nil, err
+		return AnonymousActor, nil, err
 	}
-
-	var act *vocab.Actor
-	var key *vocab.PublicKey
 
 	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
-	if act, key, err = k.LoadActorFromKeyIRI(iri); err != nil && !errors.IsNotModified(err) {
+	act, key, err := k.LoadActorFromKeyIRI(iri)
+	if err != nil && !errors.IsNotModified(err) {
 		if errors.IsForbidden(err) {
-			return nil, err
+			return act, nil, err
 		}
-		return nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
+		return act, nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
 	if vocab.IsNil(act) {
-		return nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
+		return act, nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
 	}
 	if !vocab.IsObject(act) {
-		return nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
+		return act, nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
 	}
-	k.act = act
 
 	if key == nil {
-		return nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
+		return act, nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
 	}
 
 	block, _ := pem.Decode([]byte(key.PublicKeyPem))
 	if block == nil {
-		return nil, errors.Newf("failed to parse PEM block containing the public key")
+		return act, nil, errors.Newf("failed to parse PEM block containing the public key")
 	}
-	return x509.ParsePKIXPublicKey(block.Bytes)
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	return act, pub, err
 }
 
 func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
@@ -79,7 +74,7 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	// I would like to have two code paths accessible from here:
 	//  * load local copy then try signature validation, if it fails
 	//  * load remote copy then try again signature validation
-	pk, err := k.GetKey(v.KeyId())
+	actor, pk, err := k.GetKey(v.KeyId())
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
@@ -88,7 +83,7 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	errs := make([]error, 0, len(algs))
 	for _, algo := range algs {
 		if err = v.Verify(pk, algo); err == nil {
-			return *k.act, nil
+			return actor, nil
 		}
 		errs = append(errs, errors.Annotatef(err, "failed %s", algo))
 	}
@@ -101,16 +96,16 @@ var DefaultKeyWaitLoadTime = 2 * time.Second
 // to.
 // The basic algorithm has been described here:
 // https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
-func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
+func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	var err error
 	if k.st == nil && k.c == nil {
-		return &AnonymousActor, nil, nil
+		return AnonymousActor, nil, nil
 	}
 	if k.iriIsIgnored(iri) {
-		return &AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
+		return AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
 	}
 
-	act := &AnonymousActor
+	act := AnonymousActor
 	var key *vocab.PublicKey
 
 	// NOTE(marius): first try to load from local storage
@@ -121,7 +116,7 @@ func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.Pub
 	}
 
 	if k.c == nil {
-		return &AnonymousActor, nil, errors.Newf("nil client")
+		return AnonymousActor, nil, errors.Newf("nil client")
 	}
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
@@ -136,11 +131,11 @@ func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (*vocab.Actor, *vocab.Pub
 	// NOTE(marius): if everything fails we try to load the IRI as an actor IRI
 	it, err := k.c.CtxLoadIRI(ctx, iri)
 	if err != nil {
-		return &AnonymousActor, nil, err
+		return AnonymousActor, nil, err
 	}
 
 	err = vocab.OnActor(it, func(a *vocab.Actor) error {
-		act = a
+		act = *a
 		key = &a.PublicKey
 		return nil
 	})
@@ -165,13 +160,15 @@ func (k *keyLoader) iriIsIgnored(iri vocab.IRI) bool {
 	return false
 }
 
-func (k *keyLoader) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
+func (k *keyLoader) loadFromStorage(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
-		return nil, nil, errors.Newf("invalid storage for key loader")
+		return AnonymousActor, nil, errors.Newf("invalid storage for key loader")
 	}
+
+	act := AnonymousActor
 	u, err := iri.URL()
 	if err != nil {
-		return &AnonymousActor, nil, errors.Annotatef(err, "invalid URL to load")
+		return act, nil, errors.Annotatef(err, "invalid URL to load")
 	}
 	if u.Fragment != "" {
 		u.Fragment = ""
@@ -184,13 +181,15 @@ func (k *keyLoader) loadFromStorage(iri vocab.IRI) (*vocab.Actor, *vocab.PublicK
 	// then dereference the owner, as we do in the remote case.
 	it, err := k.st.Load(iri)
 	if err != nil {
-		return &AnonymousActor, nil, err
-	}
-
-	act, err := vocab.ToActor(it)
-	if err != nil {
 		return act, nil, err
 	}
 
-	return act, &act.PublicKey, nil
+	var key *vocab.PublicKey
+	err = vocab.OnActor(it, func(a *vocab.Actor) error {
+		act = *a
+		key = &a.PublicKey
+		return nil
+	})
+
+	return act, key, nil
 }

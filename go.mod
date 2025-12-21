@@ -10,6 +10,7 @@ require (
 	github.com/go-ap/filters v0.0.0-20251217104054-a89c371835ef
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
 	github.com/go-fed/httpsig v1.1.0
+	github.com/google/go-cmp v0.6.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
 	golang.org/x/oauth2 v0.34.0
 )

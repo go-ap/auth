@@ -16,8 +16,10 @@ import (
 	"testing"
 
 	"github.com/go-ap/client"
+	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/go-ap/jsonld"
+	"github.com/google/go-cmp/cmp"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
@@ -113,8 +115,8 @@ func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
 	return string(pem.EncodeToMemory(&p))
 }
 
-func mockActor(base string) *vocab.Actor {
-	return &vocab.Actor{
+func mockActor(base string) vocab.Actor {
+	return vocab.Actor{
 		ID:   vocab.IRI(base + "/jdoe"),
 		Type: vocab.PersonType,
 		PublicKey: vocab.PublicKey{
@@ -183,45 +185,85 @@ func mockStore(it vocab.Item, access *osin.AccessData) mockStorage {
 var _ oauthStore = mockStorage{}
 
 func Test_keyLoader_GetKey(t *testing.T) {
+	type result struct {
+		act vocab.Actor
+		key crypto.PublicKey
+	}
 	tests := []struct {
 		name    string
 		arg     string
-		want    crypto.PublicKey
-		wantErr bool
+		want    result
+		wantErr error
 	}{
 		{
-			name:    "empty",
-			wantErr: true,
+			name: "empty",
+			want: result{
+				act: vocab.Actor{},
+				key: (*vocab.PublicKey)(nil),
+			},
+			wantErr: errors.Newf("empty IRI"),
 		},
 		{
-			name:    "remote key IRI as separate resource",
-			arg:     srv.URL + "/jdoe/key",
-			want:    prv.Public(),
-			wantErr: false,
+			name: "remote key IRI as separate resource",
+			arg:  srv.URL + "/jdoe/key",
+			want: result{
+				act: vocab.Actor{
+					ID:   vocab.IRI(srv.URL + "/jdoe"),
+					Type: vocab.PersonType,
+					PublicKey: vocab.PublicKey{
+						ID:           vocab.IRI(srv.URL + "/jdoe/key"),
+						Owner:        vocab.IRI(srv.URL + "/jdoe"),
+						PublicKeyPem: pemEncodePublicKey(prv),
+					},
+				},
+				key: prv.Public(),
+			},
 		},
 		{
-			name:    "remote key IRI as actor resource",
-			arg:     srv.URL + "/jdoe#main",
-			want:    prv.Public(),
-			wantErr: false,
+			name: "remote key IRI as actor resource",
+			arg:  srv.URL + "/jdoe#main",
+			want: result{
+				act: mockActor(srv.URL),
+				key: prv.Public(),
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := &keyLoader{
-				config: config{
-					logFn: logFn,
-					st:    mockStore(mockActor(tt.arg), nil),
-				},
+				logFn: logFn,
+				// NOTE(marius): this now looks suspicious
+				st: mockStore(tt.want.act, nil),
 			}
-			got, err := k.GetKey(tt.arg)
-			if (err != nil) != tt.wantErr {
+			act, key, err := k.GetKey(tt.arg)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
 				t.Errorf("GetKey() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetKey() got = %v, want %v", got, tt.want)
+			if !cmp.Equal(act, tt.want.act) {
+				t.Errorf("GetKey() got actor = %s", cmp.Diff(tt.want.act, act))
+			}
+			if !cmp.Equal(key, tt.want.key) {
+				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.want.key, key))
 			}
 		})
 	}
 }
+func areErrors(a, b any) bool {
+	_, ok1 := a.(error)
+	_, ok2 := b.(error)
+	return ok1 && ok2
+}
+
+func compareErrors(x, y interface{}) bool {
+	xe := x.(error)
+	ye := y.(error)
+	if errors.Is(xe, ye) || errors.Is(ye, xe) {
+		return true
+	}
+	return xe.Error() == ye.Error()
+}
+
+var EquateWeakErrors = cmp.FilterValues(areErrors, cmp.Comparer(compareErrors))

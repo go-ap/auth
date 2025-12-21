@@ -8,9 +8,7 @@ import (
 	"github.com/openshift/osin"
 )
 
-type oauthLoader struct {
-	config
-}
+type oauthLoader config
 
 // OAuth2Resolver
 func OAuth2Resolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
@@ -18,7 +16,7 @@ func OAuth2Resolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
 	for _, fn := range initFns {
 		fn(&c)
 	}
-	ol := oauthLoader{config: c}
+	ol := oauthLoader(c)
 	return &ol
 }
 

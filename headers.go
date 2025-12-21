@@ -27,10 +27,7 @@ type config struct {
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
-type actorResolver struct {
-	config
-	act *vocab.Actor
-}
+type actorResolver config
 
 // ActorVerifier verifies if a [http.Request] contains information about an ActivityPub [vocab.Actor]
 // that has operated it.
@@ -45,7 +42,7 @@ func Resolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
 	for _, fn := range initFns {
 		fn(&c)
 	}
-	s := actorResolver{config: c}
+	s := actorResolver(c)
 	return &s
 }
 
@@ -76,33 +73,33 @@ func SolverWithStorage(s oauthStore) SolverInitFn {
 }
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (*vocab.Actor, *vocab.PublicKey, error) {
+func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	resp, err := c.CtxGet(ctx, iri.String())
 	if err != nil {
-		return nil, nil, err
+		return AnonymousActor, nil, err
 	}
 	if resp == nil {
-		return nil, nil, errors.NotFoundf("unable to load iri %s", iri)
+		return AnonymousActor, nil, errors.NotFoundf("unable to load iri %s", iri)
 	}
 	defer resp.Body.Close()
 
 	var body []byte
 	if body, err = io.ReadAll(resp.Body); err != nil {
-		return nil, nil, err
+		return AnonymousActor, nil, err
 	}
 
 	switch resp.StatusCode {
 	case http.StatusOK, http.StatusGone, http.StatusNotModified:
 		// OK
 	default:
-		return nil, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
+		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
 	}
 
 	key := new(vocab.PublicKey)
-	act := new(vocab.Actor)
-	if err = jsonld.Unmarshal(body, act); err != nil {
+	act := AnonymousActor
+	if err = jsonld.Unmarshal(body, &act); err != nil {
 		if err = jsonld.Unmarshal(body, key); err != nil {
-			return nil, nil, err
+			return act, nil, err
 		}
 
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
@@ -110,12 +107,13 @@ func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (*vocab.Actor, 
 		// in the PublicKey struct. We should probably change that.
 		it, err := c.CtxLoadIRI(ctx, key.Owner)
 		if err != nil {
-			return nil, key, err
+			return act, key, err
 		}
 
-		if act, err = vocab.ToActor(it); err != nil {
-			return nil, key, err
-		}
+		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
+			act = *actor
+			return nil
+		})
 	} else {
 		key = &act.PublicKey
 	}
@@ -155,11 +153,11 @@ func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	switch typ {
 	case "Bearer":
 		method = "OAuth2"
-		ol := oauthLoader{config: a.config}
+		ol := oauthLoader(*a)
 		return ol.Verify(r)
 	case "Signature":
 		method = "HTTP-Signature"
-		kl := keyLoader{act: a.act, config: a.config}
+		kl := keyLoader(*a)
 		return kl.Verify(r)
 	}
 
