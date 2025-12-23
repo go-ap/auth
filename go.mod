@@ -4,13 +4,13 @@ go 1.24.0
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
-	github.com/go-ap/activitypub v0.0.0-20251217103921-9808e9a35f7b
-	github.com/go-ap/client v0.0.0-20251217104137-490438ffbafc
+	github.com/go-ap/activitypub v0.0.0-20251223172601-b4d07d3da29a
+	github.com/go-ap/client v0.0.0-20251223172820-ff14ea92c2d8
 	github.com/go-ap/errors v0.0.0-20251216162958-cb99ea99a461
-	github.com/go-ap/filters v0.0.0-20251217104054-a89c371835ef
+	github.com/go-ap/filters v0.0.0-20251223172742-63088f21cc67
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
 	github.com/go-fed/httpsig v1.1.0
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
 	golang.org/x/oauth2 v0.34.0
 )
