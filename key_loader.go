@@ -3,6 +3,9 @@ package auth
 import (
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
@@ -25,6 +28,32 @@ func HTTPSignatureResolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
 	}
 	kl := keyLoader(c)
 	return &kl
+}
+
+func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
+	pubBytes, _ := pem.Decode([]byte(key.PublicKeyPem))
+	if pubBytes == nil {
+		return nil, errors.Newf("unable to decode PEM payload for public key")
+	}
+	pk, err := x509.ParsePKIXPublicKey(pubBytes.Bytes)
+	if pk != nil {
+		return pk, nil
+	}
+	pk, err = x509.ParsePKCS1PublicKey(pubBytes.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	switch pub := pk.(type) {
+	case *rsa.PublicKey:
+		return pub, nil
+	case *ecdsa.PublicKey:
+		return pub, nil
+	case ed25519.PublicKey:
+		return pub, nil
+	default:
+		return nil, errors.Newf("invalid public key type %T", pk)
+	}
 }
 
 func (k *keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
@@ -53,11 +82,7 @@ func (k *keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 		return act, nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
 	}
 
-	block, _ := pem.Decode([]byte(key.PublicKeyPem))
-	if block == nil {
-		return act, nil, errors.Newf("failed to parse PEM block containing the public key")
-	}
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	pub, err := toCryptoPublicKey(*key)
 	return act, pub, err
 }
 
@@ -66,28 +91,40 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
 	}
+	verifyFn := func(pubKey *vocab.PublicKey) error {
+		pk, err := toCryptoPublicKey(*pubKey)
+		if err == nil {
+			return errors.Annotatef(err, "invalid public key")
+		}
 
-	// NOTE(marius):
-	// This piece of logic returns a local copy of an actor if our storage has one.
-	// In certain cases like the remote actor was recreated, or modified without an Update,
-	// that copy is no longer fresh and key signature fails.
-	// I would like to have two code paths accessible from here:
-	//  * load local copy then try signature validation, if it fails
-	//  * load remote copy then try again signature validation
-	actor, pk, err := k.GetKey(v.KeyId())
+		algs := compatibleVerifyAlgorithms(pk)
+		errs := make([]error, 0, len(algs))
+		for _, algo := range algs {
+			if err = v.Verify(pk, algo); err == nil {
+				return nil
+			}
+			errs = append(errs, errors.Annotatef(err, "failed %s", algo))
+		}
+		return errors.Join(errs...)
+	}
+
+	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
+	actor, key, err := k.loadLocalKey(vocab.IRI(v.KeyId()))
+	if err == nil {
+		if err = verifyFn(key); err == nil {
+			return actor, nil
+		}
+	}
+
+	// NOTE(marius): if local verification fails, we try to fetch a fresh copy of the key and try again.
+	actor, key, err = k.loadRemoteKey(vocab.IRI(v.KeyId()))
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
-
-	algs := compatibleVerifyAlgorithms(pk)
-	errs := make([]error, 0, len(algs))
-	for _, algo := range algs {
-		if err = v.Verify(pk, algo); err == nil {
-			return actor, nil
-		}
-		errs = append(errs, errors.Annotatef(err, "failed %s", algo))
+	if err = verifyFn(key); err == nil {
+		return actor, nil
 	}
-	return AnonymousActor, errors.Annotatef(errors.Join(errs...), "unable to verify HTTP Signature with any of the attempted algorithms")
+	return AnonymousActor, errors.Annotatef(err, "unable to verify HTTP Signature with any of the attempted algorithms")
 }
 
 var DefaultKeyWaitLoadTime = 2 * time.Second
@@ -109,12 +146,15 @@ func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 	var key *vocab.PublicKey
 
 	// NOTE(marius): first try to load from local storage
-	act, key, err = k.loadFromStorage(iri)
+	act, key, err = k.loadLocalKey(iri)
 	if err == nil && key != nil {
 		k.logFn(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}, "found local key and actor")
 		return act, key, nil
 	}
+	return k.loadRemoteKey(iri)
+}
 
+func (k *keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.c == nil {
 		return AnonymousActor, nil, errors.Newf("nil client")
 	}
@@ -123,7 +163,7 @@ func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 	defer cancelFn()
 
 	// NOTE(marius): then we try to load the IRI as a public key
-	act, key, err = LoadRemoteKey(ctx, k.c, iri)
+	act, key, err := LoadRemoteKey(ctx, k.c, iri)
 	if err == nil && key != nil {
 		return act, key, nil
 	}
@@ -160,7 +200,7 @@ func (k *keyLoader) iriIsIgnored(iri vocab.IRI) bool {
 	return false
 }
 
-func (k *keyLoader) loadFromStorage(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func (k *keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
 		return AnonymousActor, nil, errors.Newf("invalid storage for key loader")
 	}

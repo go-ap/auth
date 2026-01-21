@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	vocab "github.com/go-ap/activitypub"
+	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -96,6 +97,74 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 			}
 			if !cmp.Equal(key, tt.want.key) {
 				t.Errorf("LoadActorFromKeyIRI() got key = %s", cmp.Diff(tt.want.key, key))
+			}
+		})
+	}
+}
+
+func Test_keyLoader_GetKey(t *testing.T) {
+	type result struct {
+		act vocab.Actor
+		key crypto.PublicKey
+	}
+	tests := []struct {
+		name    string
+		arg     string
+		want    result
+		wantErr error
+	}{
+		{
+			name: "empty",
+			want: result{
+				act: vocab.Actor{},
+				key: (*vocab.PublicKey)(nil),
+			},
+			wantErr: errors.Newf("empty IRI"),
+		},
+		{
+			name: "remote key IRI as separate resource",
+			arg:  srv.URL + "/jdoe/key",
+			want: result{
+				act: vocab.Actor{
+					ID:   vocab.IRI(srv.URL + "/jdoe"),
+					Type: vocab.PersonType,
+					PublicKey: vocab.PublicKey{
+						ID:           vocab.IRI(srv.URL + "/jdoe/key"),
+						Owner:        vocab.IRI(srv.URL + "/jdoe"),
+						PublicKeyPem: pemEncodePublicKey(prv),
+					},
+				},
+				key: prv.Public(),
+			},
+		},
+		{
+			name: "remote key IRI as actor resource",
+			arg:  srv.URL + "/jdoe#main",
+			want: result{
+				act: mockActor(srv.URL),
+				key: prv.Public(),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := &keyLoader{
+				logFn: logFn,
+				// NOTE(marius): this now looks suspicious
+				st: mockStore(tt.want.act, nil),
+			}
+			act, key, err := k.GetKey(tt.arg)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("GetKey() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+			if !cmp.Equal(act, tt.want.act) {
+				t.Errorf("GetKey() got actor = %s", cmp.Diff(tt.want.act, act))
+			}
+			if !cmp.Equal(key, tt.want.key) {
+				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.want.key, key))
 			}
 		})
 	}
