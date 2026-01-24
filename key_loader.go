@@ -93,7 +93,7 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	}
 	verifyFn := func(pubKey *vocab.PublicKey) error {
 		pk, err := toCryptoPublicKey(*pubKey)
-		if err == nil {
+		if err != nil {
 			return errors.Annotatef(err, "invalid public key")
 		}
 
@@ -109,8 +109,8 @@ func (k *keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	}
 
 	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
-	actor, key, err := k.loadLocalKey(vocab.IRI(v.KeyId()))
-	if err == nil {
+	actor, key, _ := k.loadLocalKey(vocab.IRI(v.KeyId()))
+	if key != nil {
 		if err = verifyFn(key); err == nil {
 			return actor, nil
 		}
