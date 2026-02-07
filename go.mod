@@ -4,10 +4,10 @@ go 1.25
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
-	github.com/go-ap/activitypub v0.0.0-20260202145439-631b210a777e
-	github.com/go-ap/client v0.0.0-20260202145913-7e58599399bd
+	github.com/go-ap/activitypub v0.0.0-20260207133532-fc67d2cd8e5b
+	github.com/go-ap/client v0.0.0-20260207134416-f9740302de85
 	github.com/go-ap/errors v0.0.0-20251229095444-2702aa2d8569
-	github.com/go-ap/filters v0.0.0-20260202145851-13519aa34402
+	github.com/go-ap/filters v0.0.0-20260207134442-7b01f6716cc8
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
 	github.com/go-fed/httpsig v1.1.0
 	github.com/google/go-cmp v0.7.0
@@ -21,7 +21,7 @@ require (
 	git.sr.ht/~mariusor/mask v0.0.0-20250114195353-98705a6977b7 // indirect
 	github.com/RoaringBitmap/roaring v1.9.4 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
-	github.com/go-chi/chi/v5 v5.2.4 // indirect
+	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jdkato/prose v1.2.1 // indirect
 	github.com/mariusor/qstring v0.0.0-20200204164351-5a99d46de39d // indirect
