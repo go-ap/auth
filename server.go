@@ -46,6 +46,8 @@ var (
 		AllowGetAccessRequest:     false,
 		RetainTokenAfterRefresh:   true,
 		RedirectUriSeparator:      "\n",
+		// TODO(marius): when we add the PKCE support, see:
+		//    https://todo.sr.ht/~mariusor/go-activitypub/440
 		//RequirePKCEForPublicClients: true,
 	}
 )
