@@ -36,19 +36,17 @@ var (
 	DefaultAccessTypes    = osin.AllowedAccessType{osin.AUTHORIZATION_CODE, osin.REFRESH_TOKEN, osin.PASSWORD, osin.CLIENT_CREDENTIALS}
 
 	DefaultConfig = osin.ServerConfig{
-		AuthorizationExpiration:   86400,
-		AccessExpiration:          2678400,
-		TokenType:                 "Bearer",
-		AllowedAuthorizeTypes:     DefaultAuthorizeTypes,
-		AllowedAccessTypes:        DefaultAccessTypes,
-		ErrorStatusCode:           http.StatusForbidden,
-		AllowClientSecretInParams: false,
-		AllowGetAccessRequest:     false,
-		RetainTokenAfterRefresh:   true,
-		RedirectUriSeparator:      "\n",
-		// TODO(marius): when we add the PKCE support, see:
-		//    https://todo.sr.ht/~mariusor/go-activitypub/440
-		//RequirePKCEForPublicClients: true,
+		AuthorizationExpiration:     86400,
+		AccessExpiration:            2678400,
+		TokenType:                   "Bearer",
+		AllowedAuthorizeTypes:       DefaultAuthorizeTypes,
+		AllowedAccessTypes:          DefaultAccessTypes,
+		ErrorStatusCode:             http.StatusForbidden,
+		AllowClientSecretInParams:   false,
+		AllowGetAccessRequest:       false,
+		RetainTokenAfterRefresh:     true,
+		RedirectUriSeparator:        "\n",
+		RequirePKCEForPublicClients: true,
 	}
 )
 

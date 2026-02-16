@@ -72,9 +72,12 @@ func New(optFns ...OptionFn) (*Server, error) {
 		}
 	}
 	if s.Storage == nil {
-		return nil, errors.Newf("st was not set")
+		return nil, errors.Newf("storage was not set for the authorization server")
 	}
-	return s, nil
+
+	var err error
+	s.Server, err = newServer(s.Storage, s.l)
+	return s, err
 }
 
 type Metadata struct {
