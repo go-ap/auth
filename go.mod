@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
 	github.com/go-ap/activitypub v0.0.0-20260402093412-528d4eaf86a8
-	github.com/go-ap/client v0.0.0-20260402093944-cbd9738627d5
+	github.com/go-ap/client v0.0.0-20260405091524-7cdfe134f7e7
 	github.com/go-ap/errors v0.0.0-20260208110149-e1b309365966
 	github.com/go-ap/filters v0.0.0-20260402142207-91104b25ea3d
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
