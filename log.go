@@ -4,7 +4,7 @@ import (
 	log "git.sr.ht/~mariusor/lw"
 )
 
-type LoggerFn func(log.Ctx, string, ...interface{})
+type LoggerFn func(log.Ctx, string, ...any)
 
 type logger struct {
 	logFn LoggerFn
@@ -40,20 +40,20 @@ func NewLogger(opt ...optionFn) (*logger, error) {
 	return l, nil
 }
 
-var EmptyLogFn = func(log.Ctx, string, ...interface{}) {}
+var EmptyLogFn = func(log.Ctx, string, ...any) {}
 
-func (l logger) Printf(format string, v ...interface{}) {
+func (l logger) Printf(format string, v ...any) {
 	l.logFn(nil, format, v...)
 }
-func (l logger) Errorf(format string, v ...interface{}) {
+func (l logger) Errorf(format string, v ...any) {
 	l.errFn(nil, format, v...)
 }
-func (l logger) Warningf(format string, v ...interface{}) {
+func (l logger) Warningf(format string, v ...any) {
 	l.logFn(nil, format, v...)
 }
-func (l logger) Infof(format string, v ...interface{}) {
+func (l logger) Infof(format string, v ...any) {
 	l.logFn(nil, format, v...)
 }
-func (l logger) Debugf(format string, v ...interface{}) {
+func (l logger) Debugf(format string, v ...any) {
 	l.logFn(nil, format, v...)
 }

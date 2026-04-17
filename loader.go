@@ -8,12 +8,12 @@ import (
 
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 )
 
 type Client interface {
-	CtxGet(context.Context, string) (*http.Response, error)
 	CtxLoadIRI(context.Context, vocab.IRI) (vocab.Item, error)
 }
 
@@ -37,36 +37,40 @@ type ActorVerifier interface {
 	Verify(*http.Request) (vocab.Actor, error)
 }
 
-func Resolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
+func Config(cl Client, initFns ...ConfigInitFn) config {
 	c := config{c: cl}
 	for _, fn := range initFns {
 		fn(&c)
 	}
-	s := actorResolver(c)
+	return c
+}
+
+func Resolver(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+	s := actorResolver(Config(cl, initFns...))
 	return &s
 }
 
-type SolverInitFn = func(*config)
+type ConfigInitFn = func(*config)
 
-func SolverWithIgnoreList(iris ...vocab.IRI) SolverInitFn {
+func ConfigWithIgnoreList(iris ...vocab.IRI) ConfigInitFn {
 	return func(conf *config) {
 		conf.ignore = iris
 	}
 }
 
-func SolverWithLocalIRIFn(fn func(vocab.IRI) bool) SolverInitFn {
+func ConfigWithLocalIRIFn(fn func(vocab.IRI) bool) ConfigInitFn {
 	return func(conf *config) {
 		conf.iriIsLocal = fn
 	}
 }
 
-func SolverWithLogger(l LoggerFn) SolverInitFn {
+func ConfigWithLogger(l LoggerFn) ConfigInitFn {
 	return func(conf *config) {
 		conf.logFn = l
 	}
 }
 
-func SolverWithStorage(s oauthStore) SolverInitFn {
+func ConfigWithStorage(s oauthStore) ConfigInitFn {
 	return func(conf *config) {
 		conf.st = s
 	}
@@ -74,7 +78,8 @@ func SolverWithStorage(s oauthStore) SolverInitFn {
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
 func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	resp, err := c.CtxGet(ctx, iri.String())
+	cl := client.HTTPClient(c.(*client.C))
+	resp, err := cl.Get(iri.String())
 	if err != nil {
 		return AnonymousActor, nil, err
 	}
@@ -162,4 +167,23 @@ func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	}
 
 	return AnonymousActor, errors.Unauthorizedf("Unauthorized").Challenge(method)
+}
+
+// LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
+// an OAuth2 or HTTP Signatures:
+//
+// * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
+// * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
+func (c *config) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (vocab.Actor, error) {
+	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
+	var st oauthStore
+	if c.st == nil {
+		return AnonymousActor, errors.Newf("invalid storage")
+	}
+	ar := Resolver(c.c,
+		ConfigWithLogger(c.logFn), ConfigWithStorage(st), ConfigWithLocalIRIFn(c.iriIsLocal),
+		ConfigWithIgnoreList(toIgnore...),
+	)
+
+	return ar.Verify(r)
 }

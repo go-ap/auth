@@ -11,7 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/go-ap/client"
@@ -25,58 +25,49 @@ import (
 	"github.com/openshift/osin"
 )
 
-func TestKeyLoader_GetKey(t *testing.T) {
-	t.Skipf("TODO")
-}
-
-func TestOauthLoader_Verify(t *testing.T) {
-	t.Skipf("TODO")
-}
-
-func TestActorContext(t *testing.T) {
-	t.Skipf("TODO")
-}
-
 func TestServer_LoadActorFromRequest(t *testing.T) {
 	type fields struct {
-		Server    *osin.Server
 		localURLs vocab.IRIs
 		cl        Client
-		st        readStore
-		l         lw.Logger
+		st        oauthStore
 	}
 	tests := []struct {
 		name    string
 		fields  fields
 		header  string
 		want    vocab.Actor
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:    "empty",
 			fields:  fields{},
 			header:  "",
 			want:    AnonymousActor,
-			wantErr: false,
+			wantErr: errors.Newf("invalid storage"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{
-				Server:    tt.fields.Server,
-				localURLs: tt.fields.localURLs,
-				cl:        tt.fields.cl,
-				l:         tt.fields.l,
+			l := lw.Dev(lw.SetOutput(t.Output()))
+			s := &config{
+				st: tt.fields.st,
+				iriIsLocal: func(iri vocab.IRI) bool {
+					return slices.Contains(tt.fields.localURLs, iri)
+				},
+				c: tt.fields.cl,
+				logFn: func(ctx lw.Ctx, s string, a ...any) {
+					l.WithContext(ctx).Infof(s, a...)
+				},
 			}
 			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
 			r.Header.Set("Authorization", tt.header)
 			got, err := s.LoadActorFromRequest(&r)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadActorFromRequest() error = %v, wantErr %v", err, tt.wantErr)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("LoadActorFromRequest() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("LoadActorFromRequest() got = %v, want %v", got, tt.want)
+			if !cmp.Equal(got, tt.want) {
+				t.Errorf("LoadActorFromRequest() got = %s", cmp.Diff(tt.want, got))
 			}
 		})
 	}
@@ -88,7 +79,7 @@ var cl = client.New(
 	client.SkipTLSValidation(true),
 )
 
-var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
+var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...any) {
 	ll.WithContext(ctx).Debugf(msg, p...)
 }
 
@@ -187,7 +178,7 @@ func areErrors(a, b any) bool {
 	return ok1 && ok2
 }
 
-func compareErrors(x, y interface{}) bool {
+func compareErrors(x, y any) bool {
 	xe := x.(error)
 	ye := y.(error)
 	if errors.Is(xe, ye) || errors.Is(ye, xe) {

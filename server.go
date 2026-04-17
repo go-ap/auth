@@ -3,16 +3,13 @@ package auth
 import (
 	"net/http"
 
-	log "git.sr.ht/~mariusor/lw"
-	vocab "github.com/go-ap/activitypub"
+	"git.sr.ht/~mariusor/lw"
+	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 )
 
 type Server struct {
 	*osin.Server
-	localURLs vocab.IRIs
-	cl        Client
-	l         log.Logger
 }
 
 // ID is the type of authorization that IndieAuth is using
@@ -37,20 +34,54 @@ var (
 	}
 )
 
-func newServer(store osin.Storage, l log.Logger) (*osin.Server, error) {
-	s := osin.NewServer(&DefaultConfig, store)
+type OptionFn func(s *osin.Server) error
 
-	logFn := EmptyLogFn
-	errFn := EmptyLogFn
-	if l != nil {
-		logFn = func(ctx log.Ctx, format string, v ...interface{}) {
-			l.WithContext(ctx).Infof(format, v...)
-		}
-		errFn = func(ctx log.Ctx, format string, v ...interface{}) {
-			l.WithContext(ctx).Infof(format, v...)
+func WithStorage(st oauthStore) OptionFn {
+	if os, ok := st.(osin.Storage); ok {
+		return func(s *osin.Server) error {
+			s.Storage = os
+			return nil
 		}
 	}
-	var err error
-	s.Logger, err = NewLogger(LogFn(logFn), ErrFn(errFn))
-	return s, err
+	return func(s *osin.Server) error {
+		return errors.Newf("invalid osin storage %T", st)
+	}
+}
+
+func WithLogger(l lw.Logger) OptionFn {
+	return func(s *osin.Server) error {
+		logFn := EmptyLogFn
+		errFn := EmptyLogFn
+		if l != nil {
+			logFn = func(ctx lw.Ctx, format string, v ...any) {
+				l.WithContext(ctx).Infof(format, v...)
+			}
+			errFn = func(ctx lw.Ctx, format string, v ...any) {
+				l.WithContext(ctx).Infof(format, v...)
+			}
+		}
+		var err error
+		s.Logger, err = NewLogger(LogFn(logFn), ErrFn(errFn))
+		return err
+	}
+}
+
+func New(optFns ...OptionFn) (*Server, error) {
+	s := &Server{Server: osin.NewServer(&DefaultConfig, nil)}
+
+	for _, fn := range optFns {
+		if err := fn(s.Server); err != nil {
+			return s, err
+		}
+	}
+	if s.Storage == nil {
+		return nil, errors.Newf("storage was not set for the authorization server")
+	}
+
+	return s, nil
+}
+
+type Metadata struct {
+	Pw         []byte `jsonld:"pw,omitempty"`
+	PrivateKey []byte `jsonld:"key,omitempty"`
 }

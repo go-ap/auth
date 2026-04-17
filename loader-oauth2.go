@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 
-	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
@@ -19,12 +18,55 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type oauthLoader config
+
+// OAuth2
+func OAuth2(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+	ol := oauthLoader(Config(cl, initFns...))
+	return &ol
+}
+
+func (k *oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+	act := AnonymousActor
+	bearer := osin.CheckBearerAuth(r)
+	if bearer == nil {
+		return act, errors.BadRequestf("could not load bearer token from request")
+	}
+	dat, err := k.st.LoadAccess(bearer.Code)
+	if err != nil {
+		return act, err
+	}
+	if dat == nil || dat.UserData == nil {
+		return act, errors.NotFoundf("unable to load bearer")
+	}
+	if iri, err := assertToBytes(dat.UserData); err == nil {
+		it, err := k.st.Load(vocab.IRI(iri))
+		if err != nil {
+			return act, unauthorized(err)
+		}
+		if vocab.IsNil(it) {
+			return act, unauthorized(err)
+		}
+		if it, err = firstOrItem(it); err != nil {
+			return act, unauthorized(err)
+		}
+		err = vocab.OnActor(it, func(actor *vocab.Actor) error {
+			act = *actor
+			return nil
+		})
+		if err != nil {
+			return act, unauthorized(err)
+		}
+	} else {
+		return act, errors.Unauthorizedf("unable to load from bearer")
+	}
+	return act, nil
+}
+
 var AnonymousActor = vocab.Actor{
 	ID:   vocab.PublicNS,
 	Type: vocab.ActorType,
-	Name: vocab.NaturalLanguageValues{
-		vocab.NilLangRef: vocab.Content("Anonymous"),
-	},
+	Name: vocab.DefaultNaturalLanguage("Anonymous"),
 }
 
 // readStore
@@ -83,10 +125,10 @@ func firstOrItem(it vocab.Item) (vocab.Item, error) {
 }
 
 func unauthorized(err error) error {
-	return errors.NewUnauthorized(err, "Unable to validate actor from Bearer token")
+	return errors.NewUnauthorized(err, "unable to validate actor from Bearer token")
 }
 
-func assertToBytes(in interface{}) ([]byte, error) {
+func assertToBytes(in any) ([]byte, error) {
 	var ok bool
 	var data string
 	if in == nil {
@@ -122,34 +164,4 @@ func getAuthorization(hdr string) (string, string) {
 		return hdr, ""
 	}
 	return pieces[0], pieces[1]
-}
-
-// LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
-// an OAuth2 or HTTP Signatures:
-//
-// * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
-// * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (s *Server) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (vocab.Actor, error) {
-	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
-	var st oauthStore
-	if s.Server != nil && s.Server.Storage != nil {
-		st, _ = s.Server.Storage.(oauthStore)
-	}
-	isLocalFn := func(iri vocab.IRI) bool {
-		for _, i := range s.localURLs {
-			if iri.Contains(i, true) {
-				return true
-			}
-		}
-		return false
-	}
-	var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...interface{}) {
-		s.l.WithContext(ctx).Debugf(msg, p...)
-	}
-	ar := Resolver(s.cl,
-		SolverWithLogger(logFn), SolverWithStorage(st), SolverWithLocalIRIFn(isLocalFn),
-		SolverWithIgnoreList(toIgnore...),
-	)
-
-	return ar.Verify(r)
 }

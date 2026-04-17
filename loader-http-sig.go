@@ -20,13 +20,9 @@ import (
 
 type keyLoader config
 
-// HTTPSignatureResolver returns a HTTP-Signature validator for loading f
-func HTTPSignatureResolver(cl Client, initFns ...SolverInitFn) ActorVerifier {
-	c := config{c: cl}
-	for _, fn := range initFns {
-		fn(&c)
-	}
-	kl := keyLoader(c)
+// HTTPSignature returns a HTTP-Signature validator for loading f
+func HTTPSignature(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+	kl := keyLoader(Config(cl, initFns...))
 	return &kl
 }
 
