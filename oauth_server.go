@@ -64,7 +64,6 @@ func WithLogger(l log.Logger) OptionFn {
 
 func New(optFns ...OptionFn) (*Server, error) {
 	s := new(Server)
-	s.account = Account(AnonymousActor)
 
 	for _, fn := range optFns {
 		if err := fn(s); err != nil {

@@ -8,22 +8,9 @@ import (
 	"github.com/openshift/osin"
 )
 
-type Account vocab.Actor
-
-func (a *Account) IsLogged() bool {
-	if a == nil {
-		return false
-	}
-	if a.ID == vocab.PublicNS {
-		return false
-	}
-	return true
-}
-
 type Server struct {
 	*osin.Server
 	localURLs vocab.IRIs
-	account   Account
 	cl        Client
 	l         log.Logger
 }

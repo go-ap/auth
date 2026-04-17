@@ -41,7 +41,6 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 	type fields struct {
 		Server    *osin.Server
 		localURLs vocab.IRIs
-		account   Account
 		cl        Client
 		st        readStore
 		l         lw.Logger
@@ -66,7 +65,6 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 			s := &Server{
 				Server:    tt.fields.Server,
 				localURLs: tt.fields.localURLs,
-				account:   tt.fields.account,
 				cl:        tt.fields.cl,
 				l:         tt.fields.l,
 			}
