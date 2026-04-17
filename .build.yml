@@ -3,6 +3,8 @@ packages:
   - go
 sources:
   - https://github.com/go-ap/auth
+secrets:
+  - 528d361d-c834-454e-b327-193b04ab6e56
 environment:
   GO111MODULE: 'on'
 tasks:
@@ -11,4 +13,7 @@ tasks:
       make test
   - coverage: |
       set -a +x
-      cd auth && make coverage
+      cd auth
+      git switch -C master origin/master
+      make coverage
+      go tool goveralls -flagname unit-tests -service=${CI_NAME} -coverprofile auth.coverprofile -repotokenfile ~/.coveralls.tok
