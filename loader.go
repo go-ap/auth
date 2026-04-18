@@ -22,7 +22,7 @@ type config struct {
 	ignore     vocab.IRIs
 	c          Client
 	st         oauthStore
-	logFn      LoggerFn
+	l          log.Logger
 	iriIsLocal func(vocab.IRI) bool
 }
 
@@ -38,7 +38,7 @@ type ActorVerifier interface {
 }
 
 func Config(cl Client, initFns ...ConfigInitFn) config {
-	c := config{c: cl}
+	c := config{c: cl, l: log.Nil()}
 	for _, fn := range initFns {
 		fn(&c)
 	}
@@ -64,9 +64,9 @@ func ConfigWithLocalIRIFn(fn func(vocab.IRI) bool) ConfigInitFn {
 	}
 }
 
-func ConfigWithLogger(l LoggerFn) ConfigInitFn {
+func ConfigWithLogger(l log.Logger) ConfigInitFn {
 	return func(conf *config) {
-		conf.logFn = l
+		conf.l = l
 	}
 }
 
@@ -167,23 +167,4 @@ func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	}
 
 	return AnonymousActor, errors.Unauthorizedf("Unauthorized").Challenge(method)
-}
-
-// LoadActorFromRequest reads the Authorization header of an HTTP request and tries to decode it either
-// an OAuth2 or HTTP Signatures:
-//
-// * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
-// * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (c *config) LoadActorFromRequest(r *http.Request, toIgnore ...vocab.IRI) (vocab.Actor, error) {
-	// NOTE(marius): if the storage is nil, we can still use the remote client in the load function
-	var st oauthStore
-	if c.st == nil {
-		return AnonymousActor, errors.Newf("invalid storage")
-	}
-	ar := Resolver(c.c,
-		ConfigWithLogger(c.logFn), ConfigWithStorage(st), ConfigWithLocalIRIFn(c.iriIsLocal),
-		ConfigWithIgnoreList(toIgnore...),
-	)
-
-	return ar.Verify(r)
 }

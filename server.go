@@ -50,19 +50,10 @@ func WithStorage(st oauthStore) OptionFn {
 
 func WithLogger(l lw.Logger) OptionFn {
 	return func(s *osin.Server) error {
-		logFn := EmptyLogFn
-		errFn := EmptyLogFn
 		if l != nil {
-			logFn = func(ctx lw.Ctx, format string, v ...any) {
-				l.WithContext(ctx).Infof(format, v...)
-			}
-			errFn = func(ctx lw.Ctx, format string, v ...any) {
-				l.WithContext(ctx).Infof(format, v...)
-			}
+			s.Logger = logger{Logger: l}
 		}
-		var err error
-		s.Logger, err = NewLogger(LogFn(logFn), ErrFn(errFn))
-		return err
+		return nil
 	}
 }
 

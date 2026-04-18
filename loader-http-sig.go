@@ -59,7 +59,7 @@ func (k *keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 		return AnonymousActor, nil, err
 	}
 
-	k.logFn(nil, "Loading Actor from Key IRI: %s", iri)
+	k.l.WithContext(lw.Ctx{"iri": iri}).Debugf("loading Actor from Key IRI")
 	act, key, err := k.LoadActorFromKeyIRI(iri)
 	if err != nil && !errors.IsNotModified(err) {
 		if errors.IsForbidden(err) {
@@ -144,7 +144,7 @@ func (k *keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 	// NOTE(marius): first try to load from local storage
 	act, key, err = k.loadLocalKey(iri)
 	if err == nil && key != nil {
-		k.logFn(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}, "found local key and actor")
+		k.l.WithContext(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}).Debugf("found local key and actor")
 		return act, key, nil
 	}
 	return k.loadRemoteKey(iri)
@@ -176,7 +176,7 @@ func (k *keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey,
 		return nil
 	})
 
-	k.logFn(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}, "loaded remote public key and actor")
+	k.l.WithContext(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}).Debugf("loaded remote public key and actor")
 	// TODO(marius): check that act.PublicKey matches the key we just loaded if it exists.
 	return act, key, err
 }
@@ -198,7 +198,7 @@ func (k *keyLoader) iriIsIgnored(iri vocab.IRI) bool {
 
 func (k *keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
-		return AnonymousActor, nil, errors.Newf("invalid storage for key loader")
+		return AnonymousActor, nil, errInvalidStorage
 	}
 
 	act := AnonymousActor
@@ -228,4 +228,17 @@ func (k *keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, 
 	})
 
 	return act, key, nil
+}
+
+func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
+	algos := make([]httpsig.Algorithm, 0)
+	switch pubKey.(type) {
+	case *rsa.PublicKey:
+		algos = append(algos, httpsig.RSA_SHA256, httpsig.RSA_SHA512)
+	case *ecdsa.PublicKey:
+		algos = append(algos, httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256)
+	case ed25519.PublicKey:
+		algos = append(algos, httpsig.ED25519)
+	}
+	return algos
 }

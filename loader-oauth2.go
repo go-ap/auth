@@ -1,10 +1,6 @@
 package auth
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,9 +9,7 @@ import (
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
-	"github.com/go-fed/httpsig"
 	"github.com/openshift/osin"
-	"golang.org/x/oauth2"
 )
 
 type oauthLoader config
@@ -26,13 +20,14 @@ func OAuth2(cl Client, initFns ...ConfigInitFn) ActorVerifier {
 	return &ol
 }
 
-func (k *oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+var errInvalidStorage = errors.Newf("invalid storage")
+
+func (k *oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	act := AnonymousActor
-	bearer := osin.CheckBearerAuth(r)
-	if bearer == nil {
-		return act, errors.BadRequestf("could not load bearer token from request")
+	if k.st == nil {
+		return act, errInvalidStorage
 	}
-	dat, err := k.st.LoadAccess(bearer.Code)
+	dat, err := k.st.LoadAccess(tok)
 	if err != nil {
 		return act, err
 	}
@@ -63,6 +58,15 @@ func (k *oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	return act, nil
 }
 
+func (k *oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+	act := AnonymousActor
+	bearer := osin.CheckBearerAuth(r)
+	if bearer == nil {
+		return act, errors.BadRequestf("could not load bearer token from request")
+	}
+	return k.VerifyAccessCode(bearer.Code)
+}
+
 var AnonymousActor = vocab.Actor{
 	ID:   vocab.PublicNS,
 	Type: vocab.ActorType,
@@ -78,37 +82,6 @@ type readStore interface {
 type oauthStore interface {
 	readStore
 	LoadAccess(token string) (*osin.AccessData, error)
-}
-
-func LoadActorFromOAuthToken(storage oauthStore, tok *oauth2.Token) (vocab.Actor, error) {
-	var acc = AnonymousActor
-	dat, err := storage.LoadAccess(tok.AccessToken)
-	if err != nil {
-		return acc, err
-	}
-	if dat == nil || dat.UserData == nil {
-		return acc, errors.NotFoundf("unable to load bearer")
-	}
-	if iri, err := assertToBytes(dat.UserData); err == nil {
-		it, err := storage.Load(vocab.IRI(iri))
-		if err != nil {
-			return acc, unauthorized(err)
-		}
-		if vocab.IsNil(it) {
-			return acc, unauthorized(err)
-		}
-		if it, err = firstOrItem(it); err != nil {
-			return acc, unauthorized(err)
-		}
-		err = vocab.OnActor(it, func(act *vocab.Actor) error {
-			acc = *act
-			return nil
-		})
-		if err != nil {
-			return acc, unauthorized(err)
-		}
-	}
-	return acc, nil
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
@@ -143,19 +116,6 @@ func assertToBytes(in any) ([]byte, error) {
 		return []byte(str.String()), nil
 	}
 	return nil, errors.Errorf(`Could not assert "%v" to string`, in)
-}
-
-func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
-	algos := make([]httpsig.Algorithm, 0)
-	switch pubKey.(type) {
-	case *rsa.PublicKey:
-		algos = append(algos, httpsig.RSA_SHA256, httpsig.RSA_SHA512)
-	case *ecdsa.PublicKey:
-		algos = append(algos, httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256)
-	case ed25519.PublicKey:
-		algos = append(algos, httpsig.ED25519)
-	}
-	return algos
 }
 
 func getAuthorization(hdr string) (string, string) {

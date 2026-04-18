@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -25,7 +24,7 @@ import (
 	"github.com/openshift/osin"
 )
 
-func TestServer_LoadActorFromRequest(t *testing.T) {
+func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	type fields struct {
 		localURLs vocab.IRIs
 		cl        Client
@@ -34,40 +33,36 @@ func TestServer_LoadActorFromRequest(t *testing.T) {
 	tests := []struct {
 		name    string
 		fields  fields
-		header  string
+		code    string
 		want    vocab.Actor
 		wantErr error
 	}{
 		{
 			name:    "empty",
 			fields:  fields{},
-			header:  "",
+			code:    "",
 			want:    AnonymousActor,
-			wantErr: errors.Newf("invalid storage"),
+			wantErr: errInvalidStorage,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lw.Dev(lw.SetOutput(t.Output()))
-			s := &config{
+			s := oauthLoader(config{
 				st: tt.fields.st,
 				iriIsLocal: func(iri vocab.IRI) bool {
 					return slices.Contains(tt.fields.localURLs, iri)
 				},
 				c: tt.fields.cl,
-				logFn: func(ctx lw.Ctx, s string, a ...any) {
-					l.WithContext(ctx).Infof(s, a...)
-				},
-			}
-			r := http.Request{Header: http.Header{}, URL: new(url.URL)}
-			r.Header.Set("Authorization", tt.header)
-			got, err := s.LoadActorFromRequest(&r)
+				l: lw.Dev(lw.SetOutput(t.Output())),
+			})
+
+			got, err := s.VerifyAccessCode(tt.code)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("LoadActorFromRequest() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
+				t.Errorf("VerifyAccessCode() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
 				return
 			}
 			if !cmp.Equal(got, tt.want) {
-				t.Errorf("LoadActorFromRequest() got = %s", cmp.Diff(tt.want, got))
+				t.Errorf("VerifyAccessCode() got = %s", cmp.Diff(tt.want, got))
 			}
 		})
 	}
@@ -78,10 +73,6 @@ var cl = client.New(
 	client.WithLogger(ll.WithContext(lw.Ctx{"log": "client"})),
 	client.SkipTLSValidation(true),
 )
-
-var logFn LoggerFn = func(ctx lw.Ctx, msg string, p ...any) {
-	ll.WithContext(ctx).Debugf(msg, p...)
-}
 
 func isNotLocal(_ vocab.IRI) bool {
 	return false

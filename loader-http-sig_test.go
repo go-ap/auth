@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
@@ -25,7 +26,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 		ignore     vocab.IRIs
 		c          Client
 		st         oauthStore
-		l          LoggerFn
+		l          lw.Logger
 	}
 	type result struct {
 		act vocab.Actor
@@ -52,7 +53,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 				baseURL:    "https://example.com",
 				iriIsLocal: isNotLocal,
 				c:          cl,
-				l:          logFn,
+				l:          lw.Dev(lw.SetOutput(t.Output())),
 			},
 			arg: vocab.IRI(srv.URL + "/jdoe#main"),
 			want: result{
@@ -67,7 +68,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 				baseURL:    "https://example.com",
 				iriIsLocal: isNotLocal,
 				c:          cl,
-				l:          logFn,
+				l:          lw.Dev(lw.SetOutput(t.Output())),
 			},
 			arg: vocab.IRI(srv.URL + "/jdoe#main"),
 			want: result{
@@ -85,7 +86,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 				ignore:     tt.fields.ignore,
 				c:          tt.fields.c,
 				st:         tt.fields.st,
-				logFn:      tt.fields.l,
+				l:          lw.Dev(lw.SetOutput(t.Output())),
 			}
 			act, key, err := a.LoadActorFromKeyIRI(tt.arg)
 			if (err != nil) != tt.wantErr {
@@ -149,7 +150,7 @@ func Test_keyLoader_GetKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := &keyLoader{
-				logFn: logFn,
+				l: lw.Dev(lw.SetOutput(t.Output())),
 				// NOTE(marius): this now looks suspicious
 				st: mockStore(tt.want.act, nil),
 			}
