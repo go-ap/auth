@@ -45,7 +45,7 @@ func Config(cl Client, initFns ...ConfigInitFn) config {
 	return c
 }
 
-func Resolver(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+func Resolver(cl Client, initFns ...ConfigInitFn) *actorResolver {
 	s := actorResolver(Config(cl, initFns...))
 	return &s
 }

@@ -15,7 +15,7 @@ import (
 type oauthLoader config
 
 // OAuth2
-func OAuth2(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+func OAuth2(cl Client, initFns ...ConfigInitFn) *oauthLoader {
 	ol := oauthLoader(Config(cl, initFns...))
 	return &ol
 }

@@ -21,7 +21,7 @@ import (
 type keyLoader config
 
 // HTTPSignature returns a HTTP-Signature validator for loading f
-func HTTPSignature(cl Client, initFns ...ConfigInitFn) ActorVerifier {
+func HTTPSignature(cl Client, initFns ...ConfigInitFn) *keyLoader {
 	kl := keyLoader(Config(cl, initFns...))
 	return &kl
 }
