@@ -29,14 +29,6 @@ type config struct {
 // actorResolver is a used for resolving actors either in local storage or remotely
 type actorResolver config
 
-// ActorVerifier verifies if a [http.Request] contains information about an ActivityPub [vocab.Actor]
-// that has operated it.
-type ActorVerifier interface {
-	// Verify validates a request for the existence of an authorized ActivityPub [vocab.Actor] that has
-	// operated it.
-	Verify(*http.Request) (vocab.Actor, error)
-}
-
 func Config(cl Client, initFns ...ConfigInitFn) config {
 	c := config{c: cl, l: log.Nil()}
 	for _, fn := range initFns {
