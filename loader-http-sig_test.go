@@ -2,11 +2,13 @@ package auth
 
 import (
 	"crypto"
+	"net/http"
 	"reflect"
 	"testing"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
 )
@@ -24,7 +26,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 		baseURL    string
 		iriIsLocal func(vocab.IRI) bool
 		ignore     vocab.IRIs
-		c          Client
+		c          *client.C
 		st         oauthStore
 		l          lw.Logger
 	}
@@ -81,7 +83,6 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := keyLoader{
-				baseURL:    tt.fields.baseURL,
 				iriIsLocal: tt.fields.iriIsLocal,
 				ignore:     tt.fields.ignore,
 				c:          tt.fields.c,
@@ -166,6 +167,103 @@ func Test_keyLoader_GetKey(t *testing.T) {
 			}
 			if !cmp.Equal(key, tt.want.key) {
 				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.want.key, key))
+			}
+		})
+	}
+}
+
+func TestHTTPSignature(t *testing.T) {
+	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
+	type args struct {
+		cl      *client.C
+		initFns []InitFn
+	}
+	tests := []struct {
+		name string
+		args args
+		want keyLoader
+	}{
+		{
+			name: "empty",
+			args: args{},
+			want: keyLoader{l: lw.Nil()},
+		},
+		{
+			name: "with logger",
+			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
+			want: keyLoader{l: mockLogger},
+		},
+		{
+			name: "with ignoreIRIs",
+			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
+			want: keyLoader{ignore: ignoreIRIs, l: lw.Nil()},
+		},
+		{
+			name: "with local IRI func",
+			args: args{cl: nil, initFns: []InitFn{WithLocalIRIFn(mockLocalIRIFn)}},
+			want: keyLoader{iriIsLocal: mockLocalIRIFn, l: lw.Nil()},
+		},
+		{
+			name: "with storage",
+			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
+			want: keyLoader{st: new(mockSt), l: lw.Nil()},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HTTPSignature(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateKeyLoader) {
+				t.Errorf("HTTPSignature() = %s", cmp.Diff(tt.want, got, equateKeyLoader))
+			}
+		})
+	}
+}
+
+func areKeyLoader(a, b any) bool {
+	_, ok1 := a.(keyLoader)
+	_, ok2 := b.(keyLoader)
+	return ok1 && ok2
+}
+
+func compareKeyLoader(x, y any) bool {
+	xe := x.(keyLoader)
+	ye := y.(keyLoader)
+	return compareConfig(config(xe), config(ye))
+}
+
+var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))
+
+func Test_keyLoader_Verify(t *testing.T) {
+	tests := []struct {
+		name    string
+		a       keyLoader
+		r       *http.Request
+		want    vocab.Actor
+		wantErr error
+	}{
+		{
+			name:    "nil request",
+			a:       keyLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
+			r:       nil,
+			want:    AnonymousActor,
+			wantErr: errInvalidStorage,
+		},
+		{
+			name:    "no header",
+			a:       keyLoader{st: new(mockSt), l: lw.Dev(lw.SetOutput(t.Output()))},
+			r:       mockReq(),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(errors.Newf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.a.Verify(tt.r)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("Verify() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
+				return
+			}
+			if !cmp.Equal(got, tt.want, EquateItems) {
+				t.Errorf("Verify() got = %s", cmp.Diff(tt.want, got, EquateItems))
 			}
 		})
 	}

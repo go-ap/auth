@@ -7,22 +7,21 @@ import (
 	"strings"
 
 	vocab "github.com/go-ap/activitypub"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/filters"
 	"github.com/openshift/osin"
 )
 
 type oauthLoader config
 
 // OAuth2
-func OAuth2(cl Client, initFns ...ConfigInitFn) *oauthLoader {
-	ol := oauthLoader(Config(cl, initFns...))
-	return &ol
+func OAuth2(cl *client.C, initFns ...InitFn) oauthLoader {
+	return oauthLoader(Config(cl, initFns...))
 }
 
 var errInvalidStorage = errors.Newf("invalid storage")
 
-func (k *oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
+func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	act := AnonymousActor
 	if k.st == nil {
 		return act, errInvalidStorage
@@ -58,7 +57,13 @@ func (k *oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	return act, nil
 }
 
-func (k *oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+func (k oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+	if k.st == nil {
+		return AnonymousActor, errInvalidStorage
+	}
+	if r == nil || r.Header == nil {
+		return AnonymousActor, nil
+	}
 	act := AnonymousActor
 	bearer := osin.CheckBearerAuth(r)
 	if bearer == nil {
@@ -71,17 +76,6 @@ var AnonymousActor = vocab.Actor{
 	ID:   vocab.PublicNS,
 	Type: vocab.ActorType,
 	Name: vocab.DefaultNaturalLanguage("Anonymous"),
-}
-
-// readStore
-type readStore interface {
-	// Load returns an Item or an ItemCollection from an IRI
-	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
-}
-
-type oauthStore interface {
-	readStore
-	LoadAccess(token string) (*osin.AccessData, error)
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {

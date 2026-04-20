@@ -27,7 +27,7 @@ import (
 func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	type fields struct {
 		localURLs vocab.IRIs
-		cl        Client
+		cl        *client.C
 		st        oauthStore
 	}
 	tests := []struct {
@@ -179,3 +179,100 @@ func compareErrors(x, y any) bool {
 }
 
 var EquateWeakErrors = cmp.FilterValues(areErrors, cmp.Comparer(compareErrors))
+
+func TestOAuth2(t *testing.T) {
+	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
+	type args struct {
+		cl      *client.C
+		initFns []InitFn
+	}
+	tests := []struct {
+		name string
+		args args
+		want oauthLoader
+	}{
+		{
+			name: "empty",
+			args: args{},
+			want: oauthLoader{l: lw.Nil()},
+		},
+		{
+			name: "with logger",
+			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
+			want: oauthLoader{l: mockLogger},
+		},
+		{
+			name: "with ignoreIRIs",
+			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
+			want: oauthLoader{ignore: ignoreIRIs, l: lw.Nil()},
+		},
+		{
+			name: "with local IRI func",
+			args: args{cl: nil, initFns: []InitFn{WithLocalIRIFn(mockLocalIRIFn)}},
+			want: oauthLoader{iriIsLocal: mockLocalIRIFn, l: lw.Nil()},
+		},
+		{
+			name: "with storage",
+			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
+			want: oauthLoader{st: new(mockSt), l: lw.Nil()},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := OAuth2(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateOAuthLoader) {
+				t.Errorf("OAuth2() = %s", cmp.Diff(tt.want, got, equateOAuthLoader))
+			}
+		})
+	}
+}
+
+func areOAuthLoader(a, b any) bool {
+	_, ok1 := a.(oauthLoader)
+	_, ok2 := b.(oauthLoader)
+	return ok1 && ok2
+}
+
+func compareOAuthLoader(x, y any) bool {
+	xe := x.(oauthLoader)
+	ye := y.(oauthLoader)
+	return compareConfig(config(xe), config(ye))
+}
+
+var equateOAuthLoader = cmp.FilterValues(areOAuthLoader, cmp.Comparer(compareOAuthLoader))
+
+func Test_oauthLoader_Verify(t *testing.T) {
+	tests := []struct {
+		name    string
+		a       oauthLoader
+		r       *http.Request
+		want    vocab.Actor
+		wantErr error
+	}{
+		{
+			name:    "nil request",
+			a:       oauthLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
+			r:       nil,
+			want:    AnonymousActor,
+			wantErr: errInvalidStorage,
+		},
+		{
+			name:    "no header",
+			a:       oauthLoader{st: new(mockSt), l: lw.Dev(lw.SetOutput(t.Output()))},
+			r:       mockReq(),
+			want:    AnonymousActor,
+			wantErr: errors.BadRequestf("could not load bearer token from request"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.a.Verify(tt.r)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("Verify() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
+				return
+			}
+			if !cmp.Equal(got, tt.want, EquateItems) {
+				t.Errorf("Verify() got = %s", cmp.Diff(tt.want, got, EquateItems))
+			}
+		})
+	}
+}

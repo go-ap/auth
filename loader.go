@@ -1,26 +1,31 @@
 package auth
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"net/http"
 
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/jsonld"
+	"github.com/go-ap/filters"
+	"github.com/openshift/osin"
 )
 
-type Client interface {
-	CtxLoadIRI(context.Context, vocab.IRI) (vocab.Item, error)
+// readStore
+type readStore interface {
+	// Load returns an Item or an ItemCollection from an IRI
+	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
+}
+
+type oauthStore interface {
+	readStore
+	LoadAccess(string) (*osin.AccessData, error)
 }
 
 type config struct {
-	baseURL    string
 	ignore     vocab.IRIs
-	c          Client
+	c          *client.C
 	st         oauthStore
 	l          log.Logger
 	iriIsLocal func(vocab.IRI) bool
@@ -29,7 +34,7 @@ type config struct {
 // actorResolver is a used for resolving actors either in local storage or remotely
 type actorResolver config
 
-func Config(cl Client, initFns ...ConfigInitFn) config {
+func Config(cl *client.C, initFns ...InitFn) config {
 	c := config{c: cl, l: log.Nil()}
 	for _, fn := range initFns {
 		fn(&c)
@@ -37,85 +42,34 @@ func Config(cl Client, initFns ...ConfigInitFn) config {
 	return c
 }
 
-func Resolver(cl Client, initFns ...ConfigInitFn) *actorResolver {
-	s := actorResolver(Config(cl, initFns...))
-	return &s
-}
+type InitFn = func(*config)
 
-type ConfigInitFn = func(*config)
-
-func ConfigWithIgnoreList(iris ...vocab.IRI) ConfigInitFn {
+func WithIgnoreList(iris ...vocab.IRI) InitFn {
 	return func(conf *config) {
 		conf.ignore = iris
 	}
 }
 
-func ConfigWithLocalIRIFn(fn func(vocab.IRI) bool) ConfigInitFn {
+func WithLocalIRIFn(fn func(vocab.IRI) bool) InitFn {
 	return func(conf *config) {
 		conf.iriIsLocal = fn
 	}
 }
 
-func ConfigWithLogger(l log.Logger) ConfigInitFn {
+func WithLogger(l log.Logger) InitFn {
 	return func(conf *config) {
 		conf.l = l
 	}
 }
 
-func ConfigWithStorage(s oauthStore) ConfigInitFn {
+func WithStorage(s oauthStore) InitFn {
 	return func(conf *config) {
 		conf.st = s
 	}
 }
 
-// LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	cl := client.HTTPClient(c.(*client.C))
-	resp, err := cl.Get(iri.String())
-	if err != nil {
-		return AnonymousActor, nil, err
-	}
-	if resp == nil {
-		return AnonymousActor, nil, errors.NotFoundf("unable to load iri %s", iri)
-	}
-	defer resp.Body.Close()
-
-	var body []byte
-	if body, err = io.ReadAll(resp.Body); err != nil {
-		return AnonymousActor, nil, err
-	}
-
-	switch resp.StatusCode {
-	case http.StatusOK, http.StatusGone, http.StatusNotModified:
-		// OK
-	default:
-		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
-	}
-
-	key := new(vocab.PublicKey)
-	act := AnonymousActor
-	if err = jsonld.Unmarshal(body, &act); err != nil {
-		if err = jsonld.Unmarshal(body, key); err != nil {
-			return act, nil, err
-		}
-
-		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
-		// that we can use both key.Owner or key.Controller, however we don't have Controller
-		// in the PublicKey struct. We should probably change that.
-		it, err := c.CtxLoadIRI(ctx, key.Owner)
-		if err != nil {
-			return act, key, err
-		}
-
-		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
-			act = *actor
-			return nil
-		})
-	} else {
-		key = &act.PublicKey
-	}
-
-	return act, key, nil
+func Resolver(cl *client.C, initFns ...InitFn) actorResolver {
+	return actorResolver(Config(cl, initFns...))
 }
 
 // Verify reads the Authorization header of an HTTP request and tries to decode it either
@@ -123,7 +77,10 @@ func LoadRemoteKey(ctx context.Context, c Client, iri vocab.IRI) (vocab.Actor, *
 //
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
-func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
+func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
+	if a.st == nil {
+		return AnonymousActor, errInvalidStorage
+	}
 	if r == nil || r.Header == nil {
 		return AnonymousActor, nil
 	}
@@ -150,11 +107,11 @@ func (a *actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	switch typ {
 	case "Bearer":
 		method = "OAuth2"
-		ol := oauthLoader(*a)
+		ol := oauthLoader(a)
 		return ol.Verify(r)
 	case "Signature":
 		method = "HTTP-Signature"
-		kl := keyLoader(*a)
+		kl := keyLoader(a)
 		return kl.Verify(r)
 	}
 
