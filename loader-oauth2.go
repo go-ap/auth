@@ -28,28 +28,28 @@ func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	}
 	dat, err := k.st.LoadAccess(tok)
 	if err != nil {
-		return act, err
+		return act, errors.NewUnauthorized(err, "Unauthorized").Challenge("oauth2")
 	}
 	if dat == nil || dat.UserData == nil {
-		return act, errors.NotFoundf("unable to load bearer")
+		return act, errors.NotFoundf("unable to load access data")
 	}
 	if iri, err := assertToBytes(dat.UserData); err == nil {
 		it, err := k.st.Load(vocab.IRI(iri))
 		if err != nil {
-			return act, unauthorized(err)
+			return act, errors.NewUnauthorized(err, "Unauthorized").Challenge("oauth2")
 		}
 		if vocab.IsNil(it) {
-			return act, unauthorized(err)
+			return act, errors.NewUnauthorized(err, "Unauthorized").Challenge("oauth2")
 		}
 		if it, err = firstOrItem(it); err != nil {
-			return act, unauthorized(err)
+			return act, errors.NewUnauthorized(err, "Unauthorized").Challenge("oauth2")
 		}
 		err = vocab.OnActor(it, func(actor *vocab.Actor) error {
 			act = *actor
 			return nil
 		})
 		if err != nil {
-			return act, unauthorized(err)
+			return act, errors.NewUnauthorized(err, "Unauthorized").Challenge("oauth2")
 		}
 	} else {
 		return act, errors.Unauthorizedf("unable to load from bearer")
@@ -58,11 +58,11 @@ func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 }
 
 func (k oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
-	if k.st == nil {
-		return AnonymousActor, errInvalidStorage
-	}
 	if r == nil || r.Header == nil {
 		return AnonymousActor, nil
+	}
+	if k.st == nil {
+		return AnonymousActor, errInvalidStorage
 	}
 	act := AnonymousActor
 	bearer := osin.CheckBearerAuth(r)
@@ -73,7 +73,8 @@ func (k oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
 }
 
 var AnonymousActor = vocab.Actor{
-	ID:   vocab.PublicNS,
+	ID: vocab.PublicNS,
+	// NOTE(marius): this is not a standard ActivityPub type, so it might confuse applications
 	Type: vocab.ActorType,
 	Name: vocab.DefaultNaturalLanguage("Anonymous"),
 }
@@ -89,10 +90,6 @@ func firstOrItem(it vocab.Item) (vocab.Item, error) {
 		}
 	}
 	return it, nil
-}
-
-func unauthorized(err error) error {
-	return errors.NewUnauthorized(err, "unable to validate actor from Bearer token")
 }
 
 func assertToBytes(in any) ([]byte, error) {

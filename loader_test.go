@@ -3,14 +3,17 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 	"unsafe"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
+	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -55,8 +58,8 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
-			want: config{st: new(mockSt), l: lw.Nil()},
+			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
+			want: config{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -83,13 +86,16 @@ func compareConfig(x, y any) bool {
 	if !cmp.Equal(xe.iriIsLocal, ye.iriIsLocal, equateFuncs) {
 		return false
 	}
-	if !cmp.Equal(xe.st, ye.st) {
-		return false
-	}
 	if !reflect.ValueOf(xe.l).Equal(reflect.ValueOf(ye.l)) {
 		return false
 	}
-	return slices.Equal(xe.ignore, ye.ignore)
+	if !slices.Equal(xe.ignore, ye.ignore) {
+		return false
+	}
+	if xe.st == nil || ye.st == nil {
+		return xe.st == ye.st
+	}
+	return true
 }
 
 var equateConfig = cmp.FilterValues(areConfig, cmp.Comparer(compareConfig))
@@ -108,14 +114,36 @@ func compareFuncs(x, y any) bool {
 
 var equateFuncs = cmp.FilterValues(areFuncs, cmp.Comparer(compareFuncs))
 
-type mockSt struct{}
-
-func (ms *mockSt) Load(_ vocab.IRI, _ ...filters.Check) (vocab.Item, error) {
-	return nil, nil
+func st(el ...any) mockStore {
+	s := mockStore{}
+	for _, in := range el {
+		if it, ok := in.(vocab.Item); ok {
+			s.it = it
+		}
+		if ac, ok := in.(osin.AccessData); ok {
+			s.ac = ac
+		}
+	}
+	return s
 }
 
-func (ms *mockSt) LoadAccess(_ string) (*osin.AccessData, error) {
-	return nil, nil
+type mockStore struct {
+	it vocab.Item
+	ac osin.AccessData
+}
+
+func (ms mockStore) Load(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) {
+	if vocab.IsNil(ms.it) || !ms.it.GetLink().Equal(iri) {
+		return nil, errors.NotFoundf("not found")
+	}
+	return ms.it, nil
+}
+
+func (ms mockStore) LoadAccess(tok string) (*osin.AccessData, error) {
+	if ms.ac.AccessToken == tok {
+		return nil, errors.NotFoundf("not found")
+	}
+	return &ms.ac, nil
 }
 
 func TestResolver(t *testing.T) {
@@ -151,8 +179,8 @@ func TestResolver(t *testing.T) {
 		},
 		{
 			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
-			want: actorResolver{st: new(mockSt), l: lw.Nil()},
+			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
+			want: actorResolver{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -178,8 +206,13 @@ func compareResolver(x, y any) bool {
 
 var equateResolver = cmp.FilterValues(areResolver, cmp.Comparer(compareResolver))
 
-func mockReq() *http.Request {
+func mockReq(hh ...url.Values) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	for _, h := range hh {
+		for k, v := range h {
+			r.Header[k] = v
+		}
+	}
 	return r
 }
 
@@ -200,23 +233,94 @@ func Test_actorResolver_Verify(t *testing.T) {
 		},
 		{
 			name:    "no header",
-			a:       actorResolver{st: new(mockSt), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       actorResolver{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockReq(),
 			want:    AnonymousActor,
 			wantErr: nil,
 		},
+		{
+			name: "failed bearer",
+			a: actorResolver{
+				st: st(),
+				l:  lw.Dev(lw.SetOutput(t.Output())),
+			},
+			r:       mockReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
+			want:    AnonymousActor,
+			wantErr: errors.NotFoundf("not found"),
+		},
+		{
+			name: "success",
+			a: actorResolver{
+				st: st(mockActor("http://example.com"), mockAccess("test", defaultClient)),
+				l:  lw.Dev(lw.SetOutput(t.Output())),
+			},
+			r:    mockReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
+			want: mockActor("http://example.com"),
+		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.a.Verify(tt.r)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("Verify() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
-			if !cmp.Equal(got, tt.want, EquateItems) {
-				t.Errorf("Verify() got = %s", cmp.Diff(tt.want, got, EquateItems))
-			}
-		})
+		t.Run(tt.name, verifierTest(tt.a, tt.r, tt.want, tt.wantErr))
+	}
+}
+
+var defaultClient = &osin.DefaultClient{
+	Id:          "test-client",
+	Secret:      "asd",
+	RedirectUri: "http://example.com",
+	UserData:    nil,
+}
+
+func mockAuth(code string, cl osin.Client) *osin.AuthorizeData {
+	return &osin.AuthorizeData{
+		Client:    cl,
+		Code:      code,
+		ExpiresIn: 10,
+		CreatedAt: time.Now().Add(10 * time.Minute).Round(10 * time.Minute),
+		UserData:  vocab.IRI("http://example.com/~jdoe"),
+	}
+}
+
+func mockAccess(code string, cl osin.Client) osin.AccessData {
+	ad := osin.AccessData{
+		Client:        cl,
+		AuthorizeData: mockAuth("test-code", cl),
+		AccessToken:   code,
+		ExpiresIn:     10,
+		Scope:         "none",
+		RedirectUri:   "http://localhost",
+		CreatedAt:     time.Now().Add(10 * time.Minute).Round(10 * time.Minute),
+		UserData:      vocab.IRI("http://example.com/~jdoe"),
+	}
+	if code != "refresh-666" {
+		ad.RefreshToken = "refresh-666"
+		ad.AccessData = &osin.AccessData{
+			Client:        cl,
+			AuthorizeData: mockAuth("test-code", cl),
+			AccessToken:   "refresh-666",
+			ExpiresIn:     10,
+			Scope:         "none",
+			RedirectUri:   "http://localhost",
+			CreatedAt:     time.Now().Add(10 * time.Minute).Round(10 * time.Minute),
+			UserData:      vocab.IRI("http://example.com/~jdoe"),
+		}
+	}
+	return ad
+}
+
+type verifier interface {
+	Verify(*http.Request) (vocab.Actor, error)
+}
+
+func verifierTest(a verifier, r *http.Request, wantItem vocab.Item, wantErr error) func(*testing.T) {
+	return func(t *testing.T) {
+		got, err := a.Verify(r)
+		if !cmp.Equal(err, wantErr, EquateWeakErrors) {
+			t.Errorf("%T.Verify() error = %s", a, cmp.Diff(wantErr, err, EquateWeakErrors))
+			return
+		}
+		if !cmp.Equal(got, wantItem, EquateItems) {
+			t.Errorf("%T.Verify() got = %s", a, cmp.Diff(wantItem, got, EquateItems))
+		}
 	}
 }
 

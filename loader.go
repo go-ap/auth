@@ -7,7 +7,6 @@ import (
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
-	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/openshift/osin"
 )
@@ -21,6 +20,7 @@ type readStore interface {
 type oauthStore interface {
 	readStore
 	LoadAccess(string) (*osin.AccessData, error)
+	//LoadKey(vocab.IRI) (crypto.PrivateKey, error)
 }
 
 type config struct {
@@ -88,7 +88,6 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
-	method := "none"
 	var header string
 	var typ string
 	var auth string
@@ -100,20 +99,15 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 		header = auth
 		typ, auth = getAuthorization(header)
 	}
-	if typ == "" {
-		return AnonymousActor, nil
-	}
 
 	switch typ {
 	case "Bearer":
-		method = "OAuth2"
 		ol := oauthLoader(a)
 		return ol.Verify(r)
 	case "Signature":
-		method = "HTTP-Signature"
 		kl := keyLoader(a)
 		return kl.Verify(r)
+	default:
+		return AnonymousActor, nil
 	}
-
-	return AnonymousActor, errors.Unauthorizedf("Unauthorized").Challenge(method)
 }

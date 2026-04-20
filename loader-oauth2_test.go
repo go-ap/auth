@@ -15,13 +15,11 @@ import (
 
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/filters"
 	"github.com/go-ap/jsonld"
 	"github.com/google/go-cmp/cmp"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/openshift/osin"
 )
 
 func TestOAuth2_VerifyAccessCode(t *testing.T) {
@@ -96,40 +94,39 @@ func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
 
 func mockActor(base string) vocab.Actor {
 	return vocab.Actor{
-		ID:   vocab.IRI(base + "/jdoe"),
+		ID:   vocab.IRI(base + "/~jdoe"),
 		Type: vocab.PersonType,
 		PublicKey: vocab.PublicKey{
-			ID:           vocab.IRI(base + "/jdoe#main"),
-			Owner:        vocab.IRI(base + "/jdoe"),
+			ID:           vocab.IRI(base + "/~jdoe#main"),
+			Owner:        vocab.IRI(base + "/~jdoe"),
 			PublicKeyPem: pemEncodePublicKey(prv),
 		},
 	}
 }
 
 func mockKeyAndActorHandler(base string) http.Handler {
-	cnt := 0
 	actor := mockActor(base)
+	res := make(map[string][]byte)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload []byte
 		status := http.StatusNotModified
-		if cnt == 0 {
+		payload, ok := res[r.URL.Path]
+
+		if !ok {
+			status = http.StatusOK
 			payload, _ = jsonld.Marshal(actor)
 			if filepath.Base(r.URL.Path) == "key" {
-				actor.PublicKey.ID = vocab.IRI(base + "/jdoe/key")
+				actor.PublicKey.ID = vocab.IRI(base + "/~jdoe/key")
 				payload, _ = jsonld.Marshal(actor.PublicKey)
 			}
-			status = http.StatusOK
-			w.Header().Set("Cache-Control", "public")
+			res[r.URL.Path] = payload
 		}
-		cnt++
 
+		w.Header().Set("Cache-Control", "public")
 		w.WriteHeader(status)
 		_, _ = w.Write(payload)
 	})
 }
-
-var srv, _ = testServerWithURL(mockKeyAndActorHandler)
 
 func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, error) {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
@@ -140,28 +137,6 @@ func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, err
 	ts.Start()
 	return ts, nil
 }
-
-type mockStorage struct {
-	it   vocab.Item
-	data *osin.AccessData
-}
-
-func (m mockStorage) Load(iri vocab.IRI, check ...filters.Check) (vocab.Item, error) {
-	return m.it, nil
-}
-
-func (m mockStorage) LoadAccess(token string) (*osin.AccessData, error) {
-	return m.data, nil
-}
-
-func mockStore(it vocab.Item, access *osin.AccessData) mockStorage {
-	return mockStorage{
-		it:   it,
-		data: access,
-	}
-}
-
-var _ oauthStore = mockStorage{}
 
 func areErrors(a, b any) bool {
 	_, ok1 := a.(error)
@@ -213,8 +188,8 @@ func TestOAuth2(t *testing.T) {
 		},
 		{
 			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
-			want: oauthLoader{st: new(mockSt), l: lw.Nil()},
+			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
+			want: oauthLoader{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -249,30 +224,20 @@ func Test_oauthLoader_Verify(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "nil request",
-			a:       oauthLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       nil,
-			want:    AnonymousActor,
-			wantErr: errInvalidStorage,
+			name: "nil request",
+			a:    oauthLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
+			r:    nil,
+			want: AnonymousActor,
 		},
 		{
 			name:    "no header",
-			a:       oauthLoader{st: new(mockSt), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       oauthLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("could not load bearer token from request"),
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.a.Verify(tt.r)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("Verify() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
-			if !cmp.Equal(got, tt.want, EquateItems) {
-				t.Errorf("Verify() got = %s", cmp.Diff(tt.want, got, EquateItems))
-			}
-		})
+		t.Run(tt.name, verifierTest(tt.a, tt.r, tt.want, tt.wantErr))
 	}
 }

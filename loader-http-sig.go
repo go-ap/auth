@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto"
+	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
@@ -94,7 +95,7 @@ func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 
 	v, err := httpsig.NewVerifier(r)
 	if err != nil {
-		return AnonymousActor, errors.Annotatef(err, "unable to initialize HTTP Signatures verifier")
+		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
 	}
 	verifyFn := func(pubKey *vocab.PublicKey) error {
 		pk, err := toCryptoPublicKey(*pubKey)
@@ -129,10 +130,10 @@ func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 	if err = verifyFn(key); err == nil {
 		return actor, nil
 	}
-	return AnonymousActor, errors.Annotatef(err, "unable to verify HTTP Signature with any of the attempted algorithms")
+	return AnonymousActor, errors.NewUnauthorized(err, "Unauthorized").Challenge("http-signature")
 }
 
-var DefaultKeyWaitLoadTime = 2 * time.Second
+var DefaultKeyWaitLoadTime = 4 * time.Second
 
 // LoadActorFromKeyIRI retrieves the public key and tries to dereference the [vocab.Actor] it belongs
 // to.
@@ -205,6 +206,23 @@ func (k keyLoader) iriIsIgnored(iri vocab.IRI) bool {
 	return false
 }
 
+func privateKeyToPublicKey(key crypto.PrivateKey) (crypto.PublicKey, error) {
+	var pub crypto.PublicKey
+	switch prv := key.(type) {
+	case *ecdsa.PrivateKey:
+		pub = prv.Public()
+	case *rsa.PrivateKey:
+		pub = prv.Public()
+	case *dsa.PrivateKey:
+		pub = &prv.PublicKey
+	case ed25519.PrivateKey:
+		pub = prv.Public()
+	default:
+		return nil, errors.Newf("unsupported type for private key %T", key)
+	}
+	return pub, nil
+}
+
 func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
 		return AnonymousActor, nil, errInvalidStorage
@@ -220,6 +238,8 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 		iri = vocab.IRI(u.String())
 	}
 
+	var key *vocab.PublicKey
+
 	// NOTE(marius): in the case of the locally saved actors, we don't have *YET* public keys stored
 	// as independent objects.
 	// Therefore, there's no need to check if the IRI belongs to a Key object, and if that's the case
@@ -229,7 +249,6 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 		return act, nil, err
 	}
 
-	var key *vocab.PublicKey
 	err = vocab.OnActor(it, func(a *vocab.Actor) error {
 		act = *a
 		key = &a.PublicKey
@@ -278,26 +297,23 @@ func LoadRemoteKey(ctx context.Context, c *client.C, iri vocab.IRI) (vocab.Actor
 
 	key := new(vocab.PublicKey)
 	act := AnonymousActor
-	if err = jsonld.Unmarshal(body, &act); err != nil {
-		if err = jsonld.Unmarshal(body, key); err != nil {
-			return act, nil, err
-		}
-
-		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
-		// that we can use both key.Owner or key.Controller, however we don't have Controller
-		// in the PublicKey struct. We should probably change that.
-		it, err := c.CtxLoadIRI(ctx, key.Owner)
-		if err != nil {
-			return act, key, err
-		}
-
-		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
-			act = *actor
-			return nil
-		})
-	} else {
-		key = &act.PublicKey
+	err = jsonld.Unmarshal(body, key)
+	if err != nil {
+		err = jsonld.Unmarshal(body, &act)
+		return act, &act.PublicKey, nil
 	}
+	// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
+	// that we can use both key.Owner or key.Controller, however we don't have Controller
+	// in the PublicKey struct. We should probably change that.
+	it, err := c.CtxLoadIRI(ctx, key.Owner)
+	if err != nil {
+		return act, key, err
+	}
+
+	_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
+		act = *actor
+		return nil
+	})
 
 	return act, key, nil
 }

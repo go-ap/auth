@@ -22,6 +22,8 @@ func publicKey(id, owner vocab.IRI) *vocab.PublicKey {
 }
 
 func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
+	srv, _ := testServerWithURL(mockKeyAndActorHandler)
+
 	type fields struct {
 		baseURL    string
 		iriIsLocal func(vocab.IRI) bool
@@ -52,30 +54,30 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 		{
 			name: "first request",
 			fields: fields{
-				baseURL:    "https://example.com",
+				baseURL:    "http://example.com",
 				iriIsLocal: isNotLocal,
 				c:          cl,
 				l:          lw.Dev(lw.SetOutput(t.Output())),
 			},
-			arg: vocab.IRI(srv.URL + "/jdoe#main"),
+			arg: vocab.IRI(srv.URL + "/~jdoe#main"),
 			want: result{
 				act: mockActor(srv.URL),
-				key: publicKey(vocab.IRI(srv.URL+"/jdoe#main"), vocab.IRI(srv.URL+"/jdoe")),
+				key: publicKey(vocab.IRI(srv.URL+"/~jdoe#main"), vocab.IRI(srv.URL+"/~jdoe")),
 			},
 			wantErr: false,
 		},
 		{
 			name: "second request",
 			fields: fields{
-				baseURL:    "https://example.com",
+				baseURL:    "http://example.com",
 				iriIsLocal: isNotLocal,
 				c:          cl,
 				l:          lw.Dev(lw.SetOutput(t.Output())),
 			},
-			arg: vocab.IRI(srv.URL + "/jdoe#main"),
+			arg: vocab.IRI(srv.URL + "/~jdoe#main"),
 			want: result{
 				act: mockActor(srv.URL),
-				key: publicKey(vocab.IRI(srv.URL+"/jdoe#main"), vocab.IRI(srv.URL+"/jdoe")),
+				key: publicKey(vocab.IRI(srv.URL+"/~jdoe#main"), vocab.IRI(srv.URL+"/~jdoe")),
 			},
 			wantErr: false,
 		},
@@ -105,6 +107,7 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 }
 
 func Test_keyLoader_GetKey(t *testing.T) {
+	srv, _ := testServerWithURL(mockKeyAndActorHandler)
 	type result struct {
 		act vocab.Actor
 		key crypto.PublicKey
@@ -125,14 +128,14 @@ func Test_keyLoader_GetKey(t *testing.T) {
 		},
 		{
 			name: "remote key IRI as separate resource",
-			arg:  srv.URL + "/jdoe/key",
+			arg:  srv.URL + "/~jdoe/key",
 			want: result{
 				act: vocab.Actor{
-					ID:   vocab.IRI(srv.URL + "/jdoe"),
+					ID:   vocab.IRI(srv.URL + "/~jdoe"),
 					Type: vocab.PersonType,
 					PublicKey: vocab.PublicKey{
-						ID:           vocab.IRI(srv.URL + "/jdoe/key"),
-						Owner:        vocab.IRI(srv.URL + "/jdoe"),
+						ID:           vocab.IRI(srv.URL + "/~jdoe/key"),
+						Owner:        vocab.IRI(srv.URL + "/~jdoe"),
 						PublicKeyPem: pemEncodePublicKey(prv),
 					},
 				},
@@ -141,7 +144,7 @@ func Test_keyLoader_GetKey(t *testing.T) {
 		},
 		{
 			name: "remote key IRI as actor resource",
-			arg:  srv.URL + "/jdoe#main",
+			arg:  srv.URL + "/~jdoe#main",
 			want: result{
 				act: mockActor(srv.URL),
 				key: prv.Public(),
@@ -151,9 +154,10 @@ func Test_keyLoader_GetKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := &keyLoader{
+				c: client.New(),
 				l: lw.Dev(lw.SetOutput(t.Output())),
 				// NOTE(marius): this now looks suspicious
-				st: mockStore(tt.want.act, nil),
+				st: st(tt.want.act),
 			}
 			act, key, err := k.GetKey(tt.arg)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
@@ -205,8 +209,8 @@ func TestHTTPSignature(t *testing.T) {
 		},
 		{
 			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(new(mockSt))}},
-			want: keyLoader{st: new(mockSt), l: lw.Nil()},
+			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
+			want: keyLoader{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -249,22 +253,13 @@ func Test_keyLoader_Verify(t *testing.T) {
 		},
 		{
 			name:    "no header",
-			a:       keyLoader{st: new(mockSt), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       keyLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockReq(),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errors.Newf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
+			wantErr: errors.NewBadRequest(errors.Newf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.a.Verify(tt.r)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("Verify() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
-			if !cmp.Equal(got, tt.want, EquateItems) {
-				t.Errorf("Verify() got = %s", cmp.Diff(tt.want, got, EquateItems))
-			}
-		})
+		t.Run(tt.name, verifierTest(tt.a, tt.r, tt.want, tt.wantErr))
 	}
 }
