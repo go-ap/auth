@@ -34,25 +34,11 @@ func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
 	if pubBytes == nil {
 		return nil, errors.Newf("unable to decode PEM payload for public key")
 	}
-	pk, err := x509.ParsePKIXPublicKey(pubBytes.Bytes)
+	pk, _ := x509.ParsePKIXPublicKey(pubBytes.Bytes)
 	if pk != nil {
 		return pk, nil
 	}
-	pk, err = x509.ParsePKCS1PublicKey(pubBytes.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	switch pub := pk.(type) {
-	case *rsa.PublicKey:
-		return pub, nil
-	case *ecdsa.PublicKey:
-		return pub, nil
-	case ed25519.PublicKey:
-		return pub, nil
-	default:
-		return nil, errors.Newf("invalid public key type %T", pk)
-	}
+	return x509.ParsePKCS1PublicKey(pubBytes.Bytes)
 }
 
 func (k keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {

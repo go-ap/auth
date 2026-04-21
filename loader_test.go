@@ -140,7 +140,7 @@ func (ms mockStore) Load(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) 
 }
 
 func (ms mockStore) LoadAccess(tok string) (*osin.AccessData, error) {
-	if ms.ac.AccessToken == tok {
+	if ms.ac.AccessToken != tok {
 		return nil, errors.NotFoundf("not found")
 	}
 	return &ms.ac, nil
@@ -249,13 +249,23 @@ func Test_actorResolver_Verify(t *testing.T) {
 			wantErr: errors.NotFoundf("not found"),
 		},
 		{
-			name: "success",
+			name: "good bearer",
 			a: actorResolver{
 				st: st(mockActor("http://example.com"), mockAccess("test", defaultClient)),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
-			r:    mockReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
+			r:    mockReq(url.Values{"Authorization": []string{"Bearer test"}}),
 			want: mockActor("http://example.com"),
+		},
+		{
+			name: "bad signature",
+			a: actorResolver{
+				st: st(mockActor("http://example.com")),
+				l:  lw.Dev(lw.SetOutput(t.Output())),
+			},
+			r:       mockReq(url.Values{"Signature": []string{"bad"}}),
+			want:    AnonymousActor,
+			wantErr: errors.NewBadRequest(errors.NotFoundf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
 		},
 	}
 	for _, tt := range tests {

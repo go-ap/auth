@@ -20,7 +20,6 @@ type readStore interface {
 type oauthStore interface {
 	readStore
 	LoadAccess(string) (*osin.AccessData, error)
-	//LoadKey(vocab.IRI) (crypto.PrivateKey, error)
 }
 
 type config struct {
@@ -81,7 +80,7 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	if a.st == nil {
 		return AnonymousActor, errInvalidStorage
 	}
-	if r == nil || r.Header == nil {
+	if r == nil {
 		return AnonymousActor, nil
 	}
 
