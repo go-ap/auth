@@ -83,14 +83,14 @@ var AnonymousActor = vocab.Actor{
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
+	if vocab.IsNil(it) {
+		return it, nil
+	}
 	if it.IsCollection() {
-		err := vocab.OnCollectionIntf(it, func(col vocab.CollectionInterface) error {
+		_ = vocab.OnCollectionIntf(it, func(col vocab.CollectionInterface) error {
 			it = col.Collection().First()
 			return nil
 		})
-		if err != nil {
-			return nil, err
-		}
 	}
 	return it, nil
 }

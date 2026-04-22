@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -229,5 +231,109 @@ func Test_oauthLoader_Verify(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, verifierTest(tt.a, tt.r, tt.want, tt.wantErr))
+	}
+}
+
+func Test_firstOrItem(t *testing.T) {
+	tests := []struct {
+		name    string
+		it      vocab.Item
+		want    vocab.Item
+		wantErr error
+	}{
+		{
+			name:    "empty",
+			it:      nil,
+			want:    nil,
+			wantErr: nil,
+		},
+		{
+			name: "iri",
+			it:   vocab.IRI("http://example.com/666"),
+			want: vocab.IRI("http://example.com/666"),
+		},
+		{
+			name: "object",
+			it:   &vocab.Object{ID: "http://example.com/1"},
+			want: &vocab.Object{ID: "http://example.com/1"},
+		},
+		{
+			name: "actor",
+			it:   &vocab.Actor{ID: "http://example.com/~jdoe"},
+			want: &vocab.Actor{ID: "http://example.com/~jdoe"},
+		},
+		{
+			name: "activity",
+			it:   &vocab.Activity{ID: "http://example.com/create-1"},
+			want: &vocab.Activity{ID: "http://example.com/create-1"},
+		},
+		{
+			name: "item collection",
+			it:   vocab.ItemCollection{&vocab.Activity{ID: "http://example.com/create-1"}, vocab.IRI("http://example.com")},
+			want: &vocab.Activity{ID: "http://example.com/create-1"},
+		},
+		{
+			name: "ordered collection",
+			it: &vocab.OrderedCollection{
+				Type:         vocab.OrderedCollectionType, // NOTE(marius): this is needed at the moment
+				OrderedItems: vocab.ItemCollection{vocab.IRI("http://example.com"), &vocab.Activity{ID: "http://example.com/create-1"}},
+			},
+			want: vocab.IRI("http://example.com"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := firstOrItem(tt.it)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("firstOrItem() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
+				return
+			}
+			if !cmp.Equal(got, tt.want, EquateItems) {
+				t.Errorf("firstOrItem() got = %s", cmp.Diff(tt.want, got, EquateItems))
+			}
+		})
+	}
+}
+
+func Test_assertToBytes(t *testing.T) {
+	tests := []struct {
+		name       string
+		maybeBytes any
+		want       []byte
+		wantErr    error
+	}{
+		{
+			name:       "empty",
+			maybeBytes: nil,
+			want:       nil,
+			wantErr:    nil,
+		},
+		{
+			name:       "byte slice",
+			maybeBytes: []byte("test"),
+			want:       []byte("test"),
+		},
+		{
+			name:       "string",
+			maybeBytes: "test-string",
+			want:       []byte("test-string"),
+		},
+		{
+			name:       "string",
+			maybeBytes: json.RawMessage("test-json-raw-message"),
+			want:       []byte("test-json-raw-message"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := assertToBytes(tt.maybeBytes)
+			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
+				t.Errorf("assertToBytes() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
+				return
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("assertToBytes() got = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }
