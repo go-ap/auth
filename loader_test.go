@@ -52,11 +52,6 @@ func TestConfig(t *testing.T) {
 			want: config{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
-			name: "with local IRI func",
-			args: args{cl: nil, initFns: []InitFn{WithLocalIRIFn(mockLocalIRIFn)}},
-			want: config{iriIsLocal: mockLocalIRIFn, l: lw.Nil()},
-		},
-		{
 			name: "with storage",
 			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
 			want: config{st: st(), l: lw.Nil()},
@@ -81,9 +76,6 @@ func compareConfig(x, y any) bool {
 	xe := x.(config)
 	ye := y.(config)
 	if !cmp.Equal(xe.c, ye.c, cmpopts.IgnoreUnexported(http.Client{})) {
-		return false
-	}
-	if !cmp.Equal(xe.iriIsLocal, ye.iriIsLocal, equateFuncs) {
 		return false
 	}
 	if !reflect.ValueOf(xe.l).Equal(reflect.ValueOf(ye.l)) {
@@ -171,11 +163,6 @@ func TestResolver(t *testing.T) {
 			name: "with ignoreIRIs",
 			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
 			want: actorResolver{ignore: ignoreIRIs, l: lw.Nil()},
-		},
-		{
-			name: "with local IRI func",
-			args: args{cl: nil, initFns: []InitFn{WithLocalIRIFn(mockLocalIRIFn)}},
-			want: actorResolver{iriIsLocal: mockLocalIRIFn, l: lw.Nil()},
 		},
 		{
 			name: "with storage",

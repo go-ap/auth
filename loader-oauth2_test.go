@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/go-ap/client"
@@ -47,11 +46,8 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oauthLoader(config{
 				st: tt.fields.st,
-				iriIsLocal: func(iri vocab.IRI) bool {
-					return slices.Contains(tt.fields.localURLs, iri)
-				},
-				c: tt.fields.cl,
-				l: lw.Dev(lw.SetOutput(t.Output())),
+				c:  tt.fields.cl,
+				l:  lw.Dev(lw.SetOutput(t.Output())),
 			})
 
 			got, err := s.VerifyAccessCode(tt.code)
@@ -65,12 +61,6 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 		})
 	}
 }
-
-var ll = lw.Dev()
-var cl = client.New(
-	client.WithLogger(ll.WithContext(lw.Ctx{"log": "client"})),
-	client.SkipTLSValidation(true),
-)
 
 func isNotLocal(_ vocab.IRI) bool {
 	return false
@@ -92,15 +82,20 @@ func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
 	return string(pem.EncodeToMemory(&p))
 }
 
+func mockActorKey(id, owner vocab.IRI, prv *rsa.PrivateKey) vocab.PublicKey {
+	return vocab.PublicKey{
+		ID:           id,
+		Owner:        owner,
+		PublicKeyPem: pemEncodePublicKey(prv),
+	}
+}
+
 func mockActor(base string) vocab.Actor {
+	iri := vocab.IRI(base + "/~jdoe")
 	return vocab.Actor{
-		ID:   vocab.IRI(base + "/~jdoe"),
-		Type: vocab.PersonType,
-		PublicKey: vocab.PublicKey{
-			ID:           vocab.IRI(base + "/~jdoe#main"),
-			Owner:        vocab.IRI(base + "/~jdoe"),
-			PublicKeyPem: pemEncodePublicKey(prv),
-		},
+		ID:        iri,
+		Type:      vocab.PersonType,
+		PublicKey: mockActorKey(iri+"#main", iri, prv),
 	}
 }
 
@@ -180,11 +175,6 @@ func TestOAuth2(t *testing.T) {
 			name: "with ignoreIRIs",
 			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
 			want: oauthLoader{ignore: ignoreIRIs, l: lw.Nil()},
-		},
-		{
-			name: "with local IRI func",
-			args: args{cl: nil, initFns: []InitFn{WithLocalIRIFn(mockLocalIRIFn)}},
-			want: oauthLoader{iriIsLocal: mockLocalIRIFn, l: lw.Nil()},
 		},
 		{
 			name: "with storage",

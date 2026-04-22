@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto"
-	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
@@ -11,10 +10,10 @@ import (
 	"encoding/pem"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"git.sr.ht/~mariusor/lw"
+	"git.sr.ht/~mariusor/mask"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
@@ -56,18 +55,14 @@ func (k keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 		}
 		return act, nil, errors.NewNotFound(err, "unable to find actor matching key id %s", iri)
 	}
-	if vocab.IsNil(act) {
-		return act, nil, errors.NotFoundf("unable to find actor matching key id %s", iri)
-	}
 	if !vocab.IsObject(act) {
 		return act, nil, errors.NotFoundf("unable to load actor matching key id %s, received %T", iri, act)
 	}
 
-	if key == nil {
-		return act, nil, errors.NotFoundf("invalid key loaded %s for actor %s", iri, act.ID)
+	var pub crypto.PublicKey
+	if key != nil {
+		pub, err = toCryptoPublicKey(*key)
 	}
-
-	pub, err := toCryptoPublicKey(*key)
 	return act, pub, err
 }
 
@@ -126,59 +121,33 @@ var DefaultKeyWaitLoadTime = 4 * time.Second
 // The basic algorithm has been described here:
 // https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
 func (k keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	var err error
-	if k.st == nil && k.c == nil {
-		return AnonymousActor, nil, nil
-	}
+	// NOTE(marius): should we handle this in the calling code?
+	// This feels a little bit to be the wrong place.
 	if k.iriIsIgnored(iri) {
 		return AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
 	}
 
-	act := AnonymousActor
-	var key *vocab.PublicKey
-
-	// NOTE(marius): first try to load from local storage
-	act, key, err = k.loadLocalKey(iri)
-	if err == nil && key != nil {
-		k.l.WithContext(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}).Debugf("found local key and actor")
-		return act, key, nil
+	if k.st != nil {
+		// NOTE(marius): first try to load from local storage
+		act, key, err := k.loadLocalKey(iri)
+		if err == nil && key != nil {
+			k.l.WithContext(lw.Ctx{"key": mask.S(key.PublicKeyPem), "iri": act.ID}).Debugf("found local key and actor")
+			return act, key, nil
+		}
 	}
 	return k.loadRemoteKey(iri)
 }
 
 func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.c == nil {
-		return AnonymousActor, nil, errors.Newf("nil client")
+		return AnonymousActor, nil, errInvalidClient
 	}
 
 	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
 	defer cancelFn()
 
 	// NOTE(marius): then we try to load the IRI as a public key
-	act, key, err := LoadRemoteKey(ctx, k.c, iri)
-	if err == nil && key != nil {
-		return act, key, nil
-	}
-
-	// NOTE(marius): if everything fails we try to load the IRI as an actor IRI
-	it, err := k.c.CtxLoadIRI(ctx, iri)
-	if err != nil {
-		return AnonymousActor, nil, err
-	}
-
-	err = vocab.OnActor(it, func(a *vocab.Actor) error {
-		act = *a
-		key = &a.PublicKey
-		return nil
-	})
-
-	k.l.WithContext(lw.Ctx{"key": keyS(key.PublicKeyPem), "iri": act.ID}).Debugf("loaded remote public key and actor")
-	// TODO(marius): check that act.PublicKey matches the key we just loaded if it exists.
-	return act, key, err
-}
-
-func keyS(kk string) string {
-	return strings.ReplaceAll(kk, "\n", "")
+	return LoadRemoteKey(ctx, k.c, iri)
 }
 
 // iriIsIgnored this checks if the incoming iri belongs to any of the hosts/instances/iris in the
@@ -190,23 +159,6 @@ func (k keyLoader) iriIsIgnored(iri vocab.IRI) bool {
 		}
 	}
 	return false
-}
-
-func privateKeyToPublicKey(key crypto.PrivateKey) (crypto.PublicKey, error) {
-	var pub crypto.PublicKey
-	switch prv := key.(type) {
-	case *ecdsa.PrivateKey:
-		pub = prv.Public()
-	case *rsa.PrivateKey:
-		pub = prv.Public()
-	case *dsa.PrivateKey:
-		pub = &prv.PublicKey
-	case ed25519.PrivateKey:
-		pub = prv.Public()
-	default:
-		return nil, errors.Newf("unsupported type for private key %T", key)
-	}
-	return pub, nil
 }
 
 func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
@@ -245,29 +197,30 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 }
 
 func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
-	algos := make([]httpsig.Algorithm, 0)
 	switch pubKey.(type) {
 	case *rsa.PublicKey:
-		algos = append(algos, httpsig.RSA_SHA256, httpsig.RSA_SHA512)
+		return []httpsig.Algorithm{httpsig.RSA_SHA256, httpsig.RSA_SHA512}
 	case *ecdsa.PublicKey:
-		algos = append(algos, httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256)
+		return []httpsig.Algorithm{httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256}
 	case ed25519.PublicKey:
-		algos = append(algos, httpsig.ED25519)
+		return []httpsig.Algorithm{httpsig.ED25519}
 	}
-	return algos
+	return nil
 }
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
 func LoadRemoteKey(ctx context.Context, c *client.C, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	cl := client.HTTPClient(c)
+	if cl == nil {
+		return AnonymousActor, nil, errors.Newf("nil http client")
+	}
 	resp, err := cl.Get(iri.String())
 	if err != nil {
-		return AnonymousActor, nil, err
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key")
 	}
-	if resp == nil {
-		return AnonymousActor, nil, errors.NotFoundf("unable to load iri %s", iri)
-	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var body []byte
 	if body, err = io.ReadAll(resp.Body); err != nil {
@@ -278,28 +231,45 @@ func LoadRemoteKey(ctx context.Context, c *client.C, iri vocab.IRI) (vocab.Actor
 	case http.StatusOK, http.StatusGone, http.StatusNotModified:
 		// OK
 	default:
-		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch remote key")
+		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key")
 	}
 
 	key := new(vocab.PublicKey)
-	act := AnonymousActor
-	err = jsonld.Unmarshal(body, key)
-	if err != nil {
+	act := vocab.Actor{}
+
+	// NOTE(marius): try to decode the response body as a PublicKey
+	if err = jsonld.Unmarshal(body, key); err != nil || key.Owner == vocab.EmptyIRI {
+		// NOTE(marius): then we try to decode the body as an Actor
 		err = jsonld.Unmarshal(body, &act)
-		return act, &act.PublicKey, nil
 	}
-	// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
-	// that we can use both key.Owner or key.Controller, however we don't have Controller
-	// in the PublicKey struct. We should probably change that.
-	it, err := c.CtxLoadIRI(ctx, key.Owner)
-	if err != nil {
-		return act, key, err
+	// NOTE(marius): if we were unable to decode a PublicKey, nor an Actor that matches the IRI, we have failed.
+	if !(key.ID.Equal(iri) || act.ID.Equal(iri)) {
+		if err != nil {
+			err = errors.Annotatef(err, "unable to decode key or actor")
+		} else {
+			err = errors.Newf("unable to decode key or actor")
+		}
+		return AnonymousActor, nil, err
 	}
 
-	_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
-		act = *actor
-		return nil
-	})
+	if act.ID.Equal(iri) {
+		key = &act.PublicKey
+	}
+	// NOTE(marius): we successfully loaded a PublicKey, we try to load the Actor from its Owner property
+	if key.ID.Equal(iri) {
+		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
+		// that we can use both key.Owner or key.Controller, however we don't have Controller
+		// in the PublicKey struct. We should probably change that.
+		it, err := c.CtxLoadIRI(ctx, key.Owner)
+		if err != nil {
+			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor")
+		}
+
+		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
+			act = *actor
+			return nil
+		})
+	}
 
 	return act, key, nil
 }

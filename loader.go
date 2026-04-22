@@ -23,11 +23,10 @@ type oauthStore interface {
 }
 
 type config struct {
-	ignore     vocab.IRIs
-	c          *client.C
-	st         oauthStore
-	l          log.Logger
-	iriIsLocal func(vocab.IRI) bool
+	ignore vocab.IRIs
+	c      *client.C
+	st     oauthStore
+	l      log.Logger
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
@@ -46,12 +45,6 @@ type InitFn = func(*config)
 func WithIgnoreList(iris ...vocab.IRI) InitFn {
 	return func(conf *config) {
 		conf.ignore = iris
-	}
-}
-
-func WithLocalIRIFn(fn func(vocab.IRI) bool) InitFn {
-	return func(conf *config) {
-		conf.iriIsLocal = fn
 	}
 }
 

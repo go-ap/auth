@@ -19,7 +19,10 @@ func OAuth2(cl *client.C, initFns ...InitFn) oauthLoader {
 	return oauthLoader(Config(cl, initFns...))
 }
 
-var errInvalidStorage = errors.Newf("invalid storage")
+var (
+	errInvalidStorage = errors.Newf("invalid storage")
+	errInvalidClient  = errors.Newf("invalid client")
+)
 
 func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	act := AnonymousActor
