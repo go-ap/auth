@@ -23,10 +23,11 @@ type oauthStore interface {
 }
 
 type config struct {
-	ignore vocab.IRIs
-	c      *client.C
-	st     oauthStore
-	l      log.Logger
+	ignore  vocab.IRIs
+	baseIRI vocab.IRI
+	c       *client.C
+	st      oauthStore
+	l       log.Logger
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely

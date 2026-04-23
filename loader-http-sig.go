@@ -18,7 +18,7 @@ import (
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
-	"github.com/go-fed/httpsig"
+	draft "github.com/go-fed/httpsig"
 )
 
 type keyLoader config
@@ -66,19 +66,24 @@ func (k keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 	return act, pub, err
 }
 
-func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
-	if k.st == nil {
-		return AnonymousActor, errInvalidStorage
-	}
-	if r == nil || r.Header == nil {
-		return AnonymousActor, nil
+func (k keyLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
+	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
+	actor, key, _ := k.loadLocalKey(vocab.IRI(keyID))
+	if key != nil {
+		return actor, key, nil
 	}
 
-	v, err := httpsig.NewVerifier(r)
+	// NOTE(marius): if local verification fails, we try to fetch a fresh copy of the key and try again.
+	return k.loadRemoteKey(vocab.IRI(keyID))
+}
+
+func (k keyLoader) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
+	v, err := draft.NewVerifier(r)
 	if err != nil {
 		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
 	}
-	verifyFn := func(pubKey *vocab.PublicKey) error {
+
+	draftVerifyFn := func(pubKey *vocab.PublicKey) error {
 		pk, err := toCryptoPublicKey(*pubKey)
 		if err != nil {
 			return errors.Annotatef(err, "invalid public key")
@@ -95,23 +100,38 @@ func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
 		return errors.Join(errs...)
 	}
 
-	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
-	actor, key, _ := k.loadLocalKey(vocab.IRI(v.KeyId()))
-	if key != nil {
-		if err = verifyFn(key); err == nil {
-			return actor, nil
-		}
-	}
-
-	// NOTE(marius): if local verification fails, we try to fetch a fresh copy of the key and try again.
-	actor, key, err = k.loadRemoteKey(vocab.IRI(v.KeyId()))
+	actor, key, err := k.loadKey(v.KeyId())
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
-	if err = verifyFn(key); err == nil {
+
+	if err = draftVerifyFn(key); err != nil {
+		return AnonymousActor, err
+	}
+	return actor, nil
+}
+
+func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
+	if k.st == nil {
+		return AnonymousActor, errInvalidStorage
+	}
+	if r == nil || r.Header == nil {
+		return AnonymousActor, nil
+	}
+
+	if sigInput := r.Header.Get("Signature-Input"); sigInput != "" {
+		actor, err := k.VerifyRFCSignature(r)
+		if err != nil {
+			return AnonymousActor, err
+		}
 		return actor, nil
 	}
-	return AnonymousActor, errors.NewUnauthorized(err, "Unauthorized").Challenge("http-signature")
+
+	actor, err := k.VerifyDraftSignature(r)
+	if err != nil {
+		return AnonymousActor, err
+	}
+	return actor, nil
 }
 
 var DefaultKeyWaitLoadTime = 4 * time.Second
@@ -196,14 +216,14 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 	return act, key, nil
 }
 
-func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []httpsig.Algorithm {
+func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm {
 	switch pubKey.(type) {
 	case *rsa.PublicKey:
-		return []httpsig.Algorithm{httpsig.RSA_SHA256, httpsig.RSA_SHA512}
+		return []draft.Algorithm{draft.RSA_SHA256, draft.RSA_SHA512}
 	case *ecdsa.PublicKey:
-		return []httpsig.Algorithm{httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256}
+		return []draft.Algorithm{draft.ECDSA_SHA512, draft.ECDSA_SHA256}
 	case ed25519.PublicKey:
-		return []httpsig.Algorithm{httpsig.ED25519}
+		return []draft.Algorithm{draft.ED25519}
 	}
 	return nil
 }
