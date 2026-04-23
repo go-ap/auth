@@ -1,12 +1,12 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
 	log "git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/filters"
 	"github.com/openshift/osin"
 )
@@ -22,10 +22,15 @@ type oauthStore interface {
 	LoadAccess(string) (*osin.AccessData, error)
 }
 
+type apClient interface {
+	Do(*http.Request) (*http.Response, error)
+	CtxLoadIRI(ctx context.Context, id vocab.IRI) (vocab.Item, error)
+}
+
 type config struct {
 	ignore  vocab.IRIs
 	baseIRI vocab.IRI
-	c       *client.C
+	c       apClient
 	st      oauthStore
 	l       log.Logger
 }
@@ -33,7 +38,7 @@ type config struct {
 // actorResolver is a used for resolving actors either in local storage or remotely
 type actorResolver config
 
-func Config(cl *client.C, initFns ...InitFn) config {
+func Config(cl apClient, initFns ...InitFn) config {
 	c := config{c: cl, l: log.Nil()}
 	for _, fn := range initFns {
 		fn(&c)
@@ -61,7 +66,7 @@ func WithStorage(s oauthStore) InitFn {
 	}
 }
 
-func Resolver(cl *client.C, initFns ...InitFn) actorResolver {
+func Resolver(cl apClient, initFns ...InitFn) actorResolver {
 	return actorResolver(Config(cl, initFns...))
 }
 

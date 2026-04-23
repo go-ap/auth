@@ -155,7 +155,7 @@ var EquateWeakErrors = cmp.FilterValues(areErrors, cmp.Comparer(compareErrors))
 func TestOAuth2(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
 	type args struct {
-		cl      *client.C
+		cl      apClient
 		initFns []InitFn
 	}
 	tests := []struct {
@@ -224,7 +224,7 @@ func Test_oauthLoader_Verify(t *testing.T) {
 		{
 			name:    "no header",
 			a:       oauthLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       mockReq(),
+			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("could not load bearer token from request"),
 		},

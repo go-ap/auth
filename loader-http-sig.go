@@ -24,7 +24,7 @@ import (
 type keyLoader config
 
 // HTTPSignature returns a HTTP-Signature validator for loading f
-func HTTPSignature(cl *client.C, initFns ...InitFn) keyLoader {
+func HTTPSignature(cl apClient, initFns ...InitFn) keyLoader {
 	return keyLoader(Config(cl, initFns...))
 }
 
@@ -229,10 +229,10 @@ func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm {
 }
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func LoadRemoteKey(ctx context.Context, c *client.C, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func LoadRemoteKey(ctx context.Context, c apClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	cl := client.HTTPClient(c)
 	if cl == nil {
-		return AnonymousActor, nil, errors.Newf("nil http client")
+		return AnonymousActor, nil, errInvalidClient
 	}
 	resp, err := cl.Get(iri.String())
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 )
@@ -15,7 +14,7 @@ import (
 type oauthLoader config
 
 // OAuth2
-func OAuth2(cl *client.C, initFns ...InitFn) oauthLoader {
+func OAuth2(cl apClient, initFns ...InitFn) oauthLoader {
 	return oauthLoader(Config(cl, initFns...))
 }
 

@@ -232,7 +232,7 @@ func Test_keyLoader_GetKey(t *testing.T) {
 func TestHTTPSignature(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
 	type args struct {
-		cl      *client.C
+		cl      apClient
 		initFns []InitFn
 	}
 	tests := []struct {
@@ -247,17 +247,17 @@ func TestHTTPSignature(t *testing.T) {
 		},
 		{
 			name: "with logger",
-			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
+			args: args{initFns: []InitFn{WithLogger(mockLogger)}},
 			want: keyLoader{l: mockLogger},
 		},
 		{
 			name: "with ignoreIRIs",
-			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
+			args: args{initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
 			want: keyLoader{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
 			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
+			args: args{initFns: []InitFn{WithStorage(st())}},
 			want: keyLoader{st: st(), l: lw.Nil()},
 		},
 	}
@@ -302,7 +302,7 @@ func Test_keyLoader_Verify(t *testing.T) {
 		{
 			name:    "no header",
 			a:       keyLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       mockReq(),
+			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
 		},
@@ -611,7 +611,7 @@ func Test_compatibleVerifyAlgorithms(t *testing.T) {
 func TestLoadRemoteKey(t *testing.T) {
 	type args struct {
 		ctx context.Context
-		c   *client.C
+		c   apClient
 		iri vocab.IRI
 	}
 	tests := []struct {
@@ -626,7 +626,7 @@ func TestLoadRemoteKey(t *testing.T) {
 			name:    "empty",
 			args:    args{},
 			want:    AnonymousActor,
-			wantErr: errors.Newf("nil http client"),
+			wantErr: errInvalidClient,
 		},
 		{
 			name: "empty key IRI",

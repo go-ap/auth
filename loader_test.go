@@ -12,7 +12,6 @@ import (
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/filters"
 	"github.com/google/go-cmp/cmp"
@@ -28,7 +27,7 @@ var (
 func TestConfig(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
 	type args struct {
-		cl      *client.C
+		cl      apClient
 		initFns []InitFn
 	}
 	tests := []struct {
@@ -141,7 +140,7 @@ func (ms mockStore) LoadAccess(tok string) (*osin.AccessData, error) {
 func TestResolver(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
 	type args struct {
-		cl      *client.C
+		cl      apClient
 		initFns []InitFn
 	}
 	tests := []struct {
@@ -193,7 +192,7 @@ func compareResolver(x, y any) bool {
 
 var equateResolver = cmp.FilterValues(areResolver, cmp.Comparer(compareResolver))
 
-func mockReq(hh ...url.Values) *http.Request {
+func mockGetReq(hh ...url.Values) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
 	for _, h := range hh {
 		for k, v := range h {
@@ -221,7 +220,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 		{
 			name:    "no header",
 			a:       actorResolver{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       mockReq(),
+			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: nil,
 		},
@@ -231,7 +230,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 				st: st(),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
-			r:       mockReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
+			r:       mockGetReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
 			want:    AnonymousActor,
 			wantErr: errors.NotFoundf("not found"),
 		},
@@ -241,7 +240,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 				st: st(mockActor("http://example.com"), mockAccess("test", defaultClient)),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
-			r:    mockReq(url.Values{"Authorization": []string{"Bearer test"}}),
+			r:    mockGetReq(url.Values{"Authorization": []string{"Bearer test"}}),
 			want: mockActor("http://example.com"),
 		},
 		{
@@ -250,7 +249,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 				st: st(mockActor("http://example.com")),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
-			r:       mockReq(url.Values{"Signature": []string{"bad"}}),
+			r:       mockGetReq(url.Values{"Signature": []string{"bad"}}),
 			want:    AnonymousActor,
 			wantErr: errors.NewBadRequest(errors.NotFoundf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
 		},
