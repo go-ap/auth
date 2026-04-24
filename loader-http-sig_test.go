@@ -22,14 +22,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func publicKey(id, owner vocab.IRI) *vocab.PublicKey {
-	return &vocab.PublicKey{
-		ID:           id,
-		Owner:        owner,
-		PublicKeyPem: pemEncodePublicKey(prv),
-	}
-}
-
 func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 	type fields struct {
 		iriIsLocal func(vocab.IRI) bool
@@ -92,11 +84,13 @@ func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
 				srv := httptest.NewServer(tt.handlerFn)
 				tt.fields.c = client.New(client.WithHTTPClient(srv.Client()))
 			}
-			a := keyLoader{
+			a := httpSigVerifier{
 				ignore: tt.fields.ignore,
-				c:      tt.fields.c,
-				st:     tt.fields.st,
-				l:      lw.Dev(lw.SetOutput(t.Output())),
+				loader: keyLoader{
+					c:  tt.fields.c,
+					st: tt.fields.st,
+				},
+				l: lw.Dev(lw.SetOutput(t.Output())),
 			}
 			act, key, err := a.LoadActorFromKeyIRI(tt.arg)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
@@ -205,10 +199,12 @@ func Test_keyLoader_GetKey(t *testing.T) {
 			if tt.fields.st == nil {
 				tt.fields.st = st()
 			}
-			k := &keyLoader{
-				c:      client.New(client.WithHTTPClient(srv.Client())),
-				l:      lw.Dev(lw.SetOutput(t.Output())),
-				st:     tt.fields.st,
+			k := &httpSigVerifier{
+				l: lw.Dev(lw.SetOutput(t.Output())),
+				loader: keyLoader{
+					c:  client.New(client.WithHTTPClient(srv.Client())),
+					st: tt.fields.st,
+				},
 				ignore: tt.fields.ignore,
 			}
 
@@ -232,38 +228,36 @@ func Test_keyLoader_GetKey(t *testing.T) {
 func TestHTTPSignature(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
 	type args struct {
-		cl      apClient
-		initFns []InitFn
+		cl ActivityPubClient
 	}
 	tests := []struct {
-		name string
-		args args
-		want keyLoader
+		name    string
+		initFns []InitFn
+		want    httpSigVerifier
 	}{
 		{
 			name: "empty",
-			args: args{},
-			want: keyLoader{l: lw.Nil()},
+			want: httpSigVerifier{l: lw.Nil()},
 		},
 		{
-			name: "with logger",
-			args: args{initFns: []InitFn{WithLogger(mockLogger)}},
-			want: keyLoader{l: mockLogger},
+			name:    "with logger",
+			initFns: []InitFn{WithLogger(mockLogger)},
+			want:    httpSigVerifier{l: mockLogger},
 		},
 		{
-			name: "with ignoreIRIs",
-			args: args{initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
-			want: keyLoader{ignore: ignoreIRIs, l: lw.Nil()},
+			name:    "with ignoreIRIs",
+			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
+			want:    httpSigVerifier{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
-			name: "with storage",
-			args: args{initFns: []InitFn{WithStorage(st())}},
-			want: keyLoader{st: st(), l: lw.Nil()},
+			name:    "with storage",
+			initFns: []InitFn{WithStorage(st())},
+			want:    httpSigVerifier{loader: keyLoader{st: st()}, l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := HTTPSignature(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateKeyLoader) {
+			if got := HTTPSignature(tt.initFns...); !cmp.Equal(got, tt.want, equateKeyLoader) {
 				t.Errorf("HTTPSignature() = %s", cmp.Diff(tt.want, got, equateKeyLoader))
 			}
 		})
@@ -271,15 +265,29 @@ func TestHTTPSignature(t *testing.T) {
 }
 
 func areKeyLoader(a, b any) bool {
-	_, ok1 := a.(keyLoader)
-	_, ok2 := b.(keyLoader)
+	_, ok1 := a.(httpSigVerifier)
+	_, ok2 := b.(httpSigVerifier)
 	return ok1 && ok2
 }
 
 func compareKeyLoader(x, y any) bool {
-	xe := x.(keyLoader)
-	ye := y.(keyLoader)
-	return compareConfig(config(xe), config(ye))
+	xe := x.(httpSigVerifier)
+	ye := y.(httpSigVerifier)
+	xst, _ := xe.loader.st.(oauthStore)
+	yst, _ := ye.loader.st.(oauthStore)
+	cx := config{
+		ignore: xe.ignore,
+		c:      xe.loader.c,
+		st:     xst,
+		l:      xe.l,
+	}
+	cy := config{
+		ignore: ye.ignore,
+		c:      ye.loader.c,
+		st:     yst,
+		l:      ye.l,
+	}
+	return compareConfig(cx, cy)
 }
 
 var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))
@@ -287,21 +295,21 @@ var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoad
 func Test_keyLoader_Verify(t *testing.T) {
 	tests := []struct {
 		name    string
-		a       keyLoader
+		a       httpSigVerifier
 		r       *http.Request
 		want    vocab.Actor
 		wantErr error
 	}{
 		{
 			name:    "nil request",
-			a:       keyLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       httpSigVerifier{l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       nil,
 			want:    AnonymousActor,
 			wantErr: errInvalidStorage,
 		},
 		{
 			name:    "no header",
-			a:       keyLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       httpSigVerifier{loader: keyLoader{st: st()}, l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
@@ -519,24 +527,24 @@ var EquatePublicKeys = cmp.FilterValues(arePubKeys, cmp.Comparer(comparePubKeys)
 func Test_keyLoader_iriIsIgnored(t *testing.T) {
 	tests := []struct {
 		name string
-		k    keyLoader
+		k    httpSigVerifier
 		iri  vocab.IRI
 		want bool
 	}{
 		{
 			name: "empty",
-			k:    keyLoader{},
+			k:    httpSigVerifier{},
 			want: false,
 		},
 		{
 			name: "nil ignored",
-			k:    keyLoader{},
+			k:    httpSigVerifier{},
 			iri:  "http://example.com",
 			want: false,
 		},
 		{
 			name: "empty ignored",
-			k: keyLoader{
+			k: httpSigVerifier{
 				ignore: []vocab.IRI{},
 			},
 			iri:  "http://example.com",
@@ -544,7 +552,7 @@ func Test_keyLoader_iriIsIgnored(t *testing.T) {
 		},
 		{
 			name: "is ignored",
-			k: keyLoader{
+			k: httpSigVerifier{
 				ignore: []vocab.IRI{"http://example.com"},
 			},
 			iri:  "http://example.com",
@@ -552,7 +560,7 @@ func Test_keyLoader_iriIsIgnored(t *testing.T) {
 		},
 		{
 			name: "is substring ignored",
-			k: keyLoader{
+			k: httpSigVerifier{
 				ignore: []vocab.IRI{"http://example.com"},
 			},
 			iri:  "http://example.com/~jdoe",
@@ -568,7 +576,7 @@ func Test_keyLoader_iriIsIgnored(t *testing.T) {
 	}
 }
 
-func Test_compatibleVerifyAlgorithms(t *testing.T) {
+func Test_compatibleDraftVerifyAlgorithms(t *testing.T) {
 	tests := []struct {
 		name   string
 		pubKey crypto.PublicKey
@@ -601,7 +609,7 @@ func Test_compatibleVerifyAlgorithms(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := compatibleVerifyAlgorithms(tt.pubKey); !cmp.Equal(got, tt.want) {
+			if got := compatibleDraftVerifyAlgorithms(tt.pubKey); !cmp.Equal(got, tt.want) {
 				t.Errorf("compatibleVerifyAlgorithms() = %s", cmp.Diff(tt.want, got))
 			}
 		})
@@ -611,7 +619,7 @@ func Test_compatibleVerifyAlgorithms(t *testing.T) {
 func TestLoadRemoteKey(t *testing.T) {
 	type args struct {
 		ctx context.Context
-		c   apClient
+		c   ActivityPubClient
 		iri vocab.IRI
 	}
 	tests := []struct {

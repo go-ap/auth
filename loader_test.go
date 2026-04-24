@@ -19,46 +19,38 @@ import (
 	"github.com/openshift/osin"
 )
 
-var (
-	ignoreIRIs     = vocab.IRIs{"http://example.com", "http://example.com/~djoe"}
-	mockLocalIRIFn = func(_ vocab.IRI) bool { return false }
-)
+var ignoreIRIs = vocab.IRIs{"http://example.com", "http://example.com/~djoe"}
 
 func TestConfig(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
-	type args struct {
-		cl      apClient
-		initFns []InitFn
-	}
 	tests := []struct {
-		name string
-		args args
-		want config
+		name    string
+		initFns []InitFn
+		want    config
 	}{
 		{
 			name: "empty",
-			args: args{},
 			want: config{l: lw.Nil()},
 		},
 		{
-			name: "with logger",
-			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
-			want: config{l: mockLogger},
+			name:    "with logger",
+			initFns: []InitFn{WithLogger(mockLogger)},
+			want:    config{l: mockLogger},
 		},
 		{
-			name: "with ignoreIRIs",
-			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
-			want: config{ignore: ignoreIRIs, l: lw.Nil()},
+			name:    "with ignoreIRIs",
+			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
+			want:    config{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
-			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
-			want: config{st: st(), l: lw.Nil()},
+			name:    "with storage",
+			initFns: []InitFn{WithStorage(st())},
+			want:    config{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Config(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateConfig) {
+			if got := Config(tt.initFns...); !cmp.Equal(got, tt.want, equateConfig) {
 				t.Errorf("Config() = %s", cmp.Diff(tt.want, got, equateConfig))
 			}
 		})
@@ -103,8 +95,6 @@ func compareFuncs(x, y any) bool {
 	return px == py
 }
 
-var equateFuncs = cmp.FilterValues(areFuncs, cmp.Comparer(compareFuncs))
-
 func st(el ...any) mockStore {
 	s := mockStore{}
 	for _, in := range el {
@@ -139,39 +129,39 @@ func (ms mockStore) LoadAccess(tok string) (*osin.AccessData, error) {
 
 func TestResolver(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
-	type args struct {
-		cl      apClient
-		initFns []InitFn
-	}
 	tests := []struct {
-		name string
-		args args
-		want actorResolver
+		name    string
+		initFns []InitFn
+		want    actorResolver
 	}{
 		{
 			name: "empty",
-			args: args{},
 			want: actorResolver{l: lw.Nil()},
 		},
 		{
-			name: "with logger",
-			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
-			want: actorResolver{l: mockLogger},
+			name:    "with logger",
+			initFns: []InitFn{WithLogger(mockLogger)},
+			want:    actorResolver{l: mockLogger},
 		},
 		{
-			name: "with ignoreIRIs",
-			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
-			want: actorResolver{ignore: ignoreIRIs, l: lw.Nil()},
+			name:    "with ignoreIRIs",
+			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
+			want:    actorResolver{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
-			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
-			want: actorResolver{st: st(), l: lw.Nil()},
+			name:    "with storage",
+			initFns: []InitFn{WithStorage(st())},
+			want:    actorResolver{st: st(), l: lw.Nil()},
+		},
+		{
+			name:    "with client - mostly useless",
+			initFns: []InitFn{WithClient(nil)},
+			want:    actorResolver{c: nil, l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Resolver(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateResolver) {
+			if got := Resolver(tt.initFns...); !cmp.Equal(got, tt.want, equateResolver) {
 				t.Errorf("Resolver() = %s", cmp.Diff(tt.want, got, equateResolver))
 			}
 		})

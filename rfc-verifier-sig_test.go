@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-ap/activitypub"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
 )
@@ -56,9 +57,29 @@ func Test_syncedNonceStore_Seen(t *testing.T) {
 
 func Test_keyLoader_VerifyRFCSignature(t *testing.T) {
 	type fields struct {
+		cl      ActivityPubClient
+		initFns []InitFn
 	}
+
+	initKeyLoader := func(ff fields) httpSigVerifier {
+		nonceStore = new(syncedNonceStore)
+		c := config{c: ff.cl}
+		for _, fn := range ff.initFns {
+			fn(&c)
+		}
+		return httpSigVerifier{
+			ignore: c.ignore,
+			loader: keyLoader{
+				c:  c.c,
+				st: c.st,
+			},
+			l: c.l,
+		}
+	}
+
 	tests := []struct {
 		name    string
+		fields  fields
 		req     *http.Request
 		created time.Time
 		want    activitypub.Actor
@@ -127,10 +148,29 @@ func Test_keyLoader_VerifyRFCSignature(t *testing.T) {
 			want:    AnonymousActor,
 			wantErr: errors.Annotatef(errInvalidClient, "no matching signatures"),
 		},
+		{
+			name:    "GET rfc9421 - B.2.1. example, w/ client",
+			created: time.UnixMicro(1618884473 * 1000 * 1000),
+			fields: fields{
+				cl: client.New(),
+			},
+			req: mockGetReq(url.Values{
+				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
+				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
+			}),
+			want: AnonymousActor,
+			wantErr: errors.Annotatef(
+				errors.Annotatef(
+					errors.Newf(`Get "test-key-rsa-pss": unsupported protocol scheme ""`),
+					"unable to fetch key",
+				),
+				"no matching signatures",
+			),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := keyLoader{}
+			k := initKeyLoader(tt.fields)
 			if !tt.created.IsZero() {
 				nowFn = func() time.Time {
 					return tt.created

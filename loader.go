@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -22,24 +21,23 @@ type oauthStore interface {
 	LoadAccess(string) (*osin.AccessData, error)
 }
 
-type apClient interface {
-	Do(*http.Request) (*http.Response, error)
-	CtxLoadIRI(ctx context.Context, id vocab.IRI) (vocab.Item, error)
+type ActivityPubClient interface {
+	Do(r *http.Request) (*http.Response, error)
+	LoadIRI(id vocab.IRI) (vocab.Item, error)
 }
 
 type config struct {
-	ignore  vocab.IRIs
-	baseIRI vocab.IRI
-	c       apClient
-	st      oauthStore
-	l       log.Logger
+	ignore vocab.IRIs
+	c      ActivityPubClient
+	st     oauthStore
+	l      log.Logger
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
 type actorResolver config
 
-func Config(cl apClient, initFns ...InitFn) config {
-	c := config{c: cl, l: log.Nil()}
+func Config(initFns ...InitFn) config {
+	c := config{l: log.Nil()}
 	for _, fn := range initFns {
 		fn(&c)
 	}
@@ -66,8 +64,14 @@ func WithStorage(s oauthStore) InitFn {
 	}
 }
 
-func Resolver(cl apClient, initFns ...InitFn) actorResolver {
-	return actorResolver(Config(cl, initFns...))
+func WithClient(cl ActivityPubClient) InitFn {
+	return func(c *config) {
+		c.c = cl
+	}
+}
+
+func Resolver(initFns ...InitFn) actorResolver {
+	return actorResolver(Config(initFns...))
 }
 
 // Verify reads the Authorization header of an HTTP request and tries to decode it either
@@ -100,10 +104,14 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 
 	switch typ {
 	case "Bearer":
-		ol := oauthLoader(a)
+		ol := oauthLoader{st: a.st}
 		return ol.Verify(r)
 	case "Signature":
-		kl := keyLoader(a)
+		kl := httpSigVerifier{
+			ignore: a.ignore,
+			loader: keyLoader{c: a.c, st: a.st},
+			l:      a.l,
+		}
 		return kl.Verify(r)
 	default:
 		return AnonymousActor, nil

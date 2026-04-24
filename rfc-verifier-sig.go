@@ -46,7 +46,7 @@ var defaultValidationOpts = sigparams.ValidateOpts{
 
 // VerifyRFCSignature checks for RFC9421 compatible HTTP signatures.
 // It is based on the common-fate/httpsig/verifier.Parse functionality adapted for go-ap.
-func (k keyLoader) VerifyRFCSignature(req *http.Request) (vocab.Actor, error) {
+func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, error) {
 	if req == nil {
 		return AnonymousActor, nil
 	}
@@ -99,7 +99,7 @@ func (k keyLoader) VerifyRFCSignature(req *http.Request) (vocab.Actor, error) {
 		//
 		// 6.4. If the algorithm is explicitly stated in the signature parameters using a value
 		// from the "HTTP Signature Algorithms" registry, the verifier will use the referenced algorithm.
-		actor, aKey, err := k.loadKey(msg.Input.KeyID)
+		actor, aKey, err := k.loader.Load(vocab.IRI(msg.Input.KeyID))
 		if err != nil {
 			errs = append(errs, err)
 			continue

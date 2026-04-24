@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"git.sr.ht/~mariusor/lw"
-	"git.sr.ht/~mariusor/mask"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
@@ -21,11 +20,26 @@ import (
 	draft "github.com/go-fed/httpsig"
 )
 
-type keyLoader config
+// LoadRemoteKey fetches a remote Public Key and returns it's owner.
+func LoadRemoteKey(_ context.Context, c ActivityPubClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+	return keyLoader{c: c}.loadRemoteKey(iri)
+}
+
+type httpSigVerifier struct {
+	ignore vocab.IRIs
+	loader keyLoader
+	l      lw.Logger
+}
 
 // HTTPSignature returns a HTTP-Signature validator for loading f
-func HTTPSignature(cl apClient, initFns ...InitFn) keyLoader {
-	return keyLoader(Config(cl, initFns...))
+func HTTPSignature(initFns ...InitFn) httpSigVerifier {
+	c := Config(initFns...)
+	v := httpSigVerifier{
+		ignore: c.ignore,
+		loader: keyLoader{c: c.c, st: c.st},
+		l:      c.l,
+	}
+	return v
 }
 
 func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
@@ -40,7 +54,7 @@ func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
 	return x509.ParsePKCS1PublicKey(pubBytes.Bytes)
 }
 
-func (k keyLoader) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
+func (k httpSigVerifier) GetKey(id string) (vocab.Actor, crypto.PublicKey, error) {
 	iri := vocab.IRI(id)
 	_, err := iri.URL()
 	if err != nil {
@@ -77,7 +91,7 @@ func (k keyLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) 
 	return k.loadRemoteKey(vocab.IRI(keyID))
 }
 
-func (k keyLoader) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
+func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
 	v, err := draft.NewVerifier(r)
 	if err != nil {
 		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
@@ -89,7 +103,7 @@ func (k keyLoader) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
 			return errors.Annotatef(err, "invalid public key")
 		}
 
-		algs := compatibleVerifyAlgorithms(pk)
+		algs := compatibleDraftVerifyAlgorithms(pk)
 		errs := make([]error, 0, len(algs))
 		for _, algo := range algs {
 			if err = v.Verify(pk, algo); err == nil {
@@ -100,7 +114,7 @@ func (k keyLoader) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
 		return errors.Join(errs...)
 	}
 
-	actor, key, err := k.loadKey(v.KeyId())
+	actor, key, err := k.loader.Load(vocab.IRI(v.KeyId()))
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
@@ -111,8 +125,8 @@ func (k keyLoader) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
 	return actor, nil
 }
 
-func (k keyLoader) Verify(r *http.Request) (vocab.Actor, error) {
-	if k.st == nil {
+func (k httpSigVerifier) Verify(r *http.Request) (vocab.Actor, error) {
+	if k.loader.st == nil {
 		return AnonymousActor, errInvalidStorage
 	}
 	if r == nil || r.Header == nil {
@@ -140,18 +154,26 @@ var DefaultKeyWaitLoadTime = 4 * time.Second
 // to.
 // The basic algorithm has been described here:
 // https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
-func (k keyLoader) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func (k httpSigVerifier) LoadActorFromKeyIRI(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	// NOTE(marius): should we handle this in the calling code?
 	// This feels a little bit to be the wrong place.
 	if k.iriIsIgnored(iri) {
 		return AnonymousActor, nil, errors.Forbiddenf("actor is blocked")
 	}
 
+	return k.loader.Load(iri)
+}
+
+type keyLoader struct {
+	c  ActivityPubClient
+	st readStore
+}
+
+func (k keyLoader) Load(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st != nil {
 		// NOTE(marius): first try to load from local storage
 		act, key, err := k.loadLocalKey(iri)
 		if err == nil && key != nil {
-			k.l.WithContext(lw.Ctx{"key": mask.S(key.PublicKeyPem), "iri": act.ID}).Debugf("found local key and actor")
 			return act, key, nil
 		}
 	}
@@ -163,74 +185,7 @@ func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, 
 		return AnonymousActor, nil, errInvalidClient
 	}
 
-	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultKeyWaitLoadTime)
-	defer cancelFn()
-
-	// NOTE(marius): then we try to load the IRI as a public key
-	return LoadRemoteKey(ctx, k.c, iri)
-}
-
-// iriIsIgnored this checks if the incoming iri belongs to any of the hosts/instances/iris in the
-// ignored list.
-func (k keyLoader) iriIsIgnored(iri vocab.IRI) bool {
-	for _, i := range k.ignore {
-		if iri.Contains(i, false) {
-			return true
-		}
-	}
-	return false
-}
-
-func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	if k.st == nil {
-		return AnonymousActor, nil, errInvalidStorage
-	}
-
-	act := AnonymousActor
-	u, err := iri.URL()
-	if err != nil {
-		return act, nil, errors.Annotatef(err, "invalid URL to load")
-	}
-	if u.Fragment != "" {
-		u.Fragment = ""
-		iri = vocab.IRI(u.String())
-	}
-
-	var key *vocab.PublicKey
-
-	// NOTE(marius): in the case of the locally saved actors, we don't have *YET* public keys stored
-	// as independent objects.
-	// Therefore, there's no need to check if the IRI belongs to a Key object, and if that's the case
-	// then dereference the owner, as we do in the remote case.
-	it, err := k.st.Load(iri)
-	if err != nil {
-		return act, nil, err
-	}
-
-	err = vocab.OnActor(it, func(a *vocab.Actor) error {
-		act = *a
-		key = &a.PublicKey
-		return nil
-	})
-
-	return act, key, nil
-}
-
-func compatibleVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm {
-	switch pubKey.(type) {
-	case *rsa.PublicKey:
-		return []draft.Algorithm{draft.RSA_SHA256, draft.RSA_SHA512}
-	case *ecdsa.PublicKey:
-		return []draft.Algorithm{draft.ECDSA_SHA512, draft.ECDSA_SHA256}
-	case ed25519.PublicKey:
-		return []draft.Algorithm{draft.ED25519}
-	}
-	return nil
-}
-
-// LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func LoadRemoteKey(ctx context.Context, c apClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	cl := client.HTTPClient(c)
+	cl := client.HTTPClient(k.c)
 	if cl == nil {
 		return AnonymousActor, nil, errInvalidClient
 	}
@@ -280,7 +235,7 @@ func LoadRemoteKey(ctx context.Context, c apClient, iri vocab.IRI) (vocab.Actor,
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
-		it, err := c.CtxLoadIRI(ctx, key.Owner)
+		it, err := k.c.LoadIRI(key.Owner)
 		if err != nil {
 			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor")
 		}
@@ -292,4 +247,62 @@ func LoadRemoteKey(ctx context.Context, c apClient, iri vocab.IRI) (vocab.Actor,
 	}
 
 	return act, key, nil
+}
+
+// iriIsIgnored this checks if the incoming iri belongs to any of the hosts/instances/iris in the
+// ignored list.
+func (k httpSigVerifier) iriIsIgnored(iri vocab.IRI) bool {
+	for _, i := range k.ignore {
+		if iri.Contains(i, false) {
+			return true
+		}
+	}
+	return false
+}
+
+func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+	if k.st == nil {
+		return AnonymousActor, nil, errInvalidStorage
+	}
+
+	act := AnonymousActor
+	u, err := iri.URL()
+	if err != nil {
+		return act, nil, errors.Annotatef(err, "invalid URL to load")
+	}
+	if u.Fragment != "" {
+		u.Fragment = ""
+		iri = vocab.IRI(u.String())
+	}
+
+	var key *vocab.PublicKey
+
+	// NOTE(marius): in the case of the locally saved actors, we don't have *YET* public keys stored
+	// as independent objects.
+	// Therefore, there's no need to check if the IRI belongs to a Key object, and if that's the case
+	// then dereference the owner, as we do in the remote case.
+	it, err := k.st.Load(iri)
+	if err != nil {
+		return act, nil, err
+	}
+
+	err = vocab.OnActor(it, func(a *vocab.Actor) error {
+		act = *a
+		key = &a.PublicKey
+		return nil
+	})
+
+	return act, key, nil
+}
+
+func compatibleDraftVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm {
+	switch pubKey.(type) {
+	case *rsa.PublicKey:
+		return []draft.Algorithm{draft.RSA_SHA256, draft.RSA_SHA512}
+	case *ecdsa.PublicKey:
+		return []draft.Algorithm{draft.ECDSA_SHA512, draft.ECDSA_SHA256}
+	case ed25519.PublicKey:
+		return []draft.Algorithm{draft.ED25519}
+	}
+	return nil
 }

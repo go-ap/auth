@@ -7,10 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -46,11 +43,10 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := oauthLoader(config{
+			s := oauthLoader{
 				st: tt.fields.st,
-				c:  tt.fields.cl,
 				l:  lw.Dev(lw.SetOutput(t.Output())),
-			})
+			}
 
 			got, err := s.VerifyAccessCode(tt.code)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
@@ -125,16 +121,6 @@ func mockKeyAndActorHandler(base string) http.Handler {
 	})
 }
 
-func testServerWithURL(handler func(string) http.Handler) (*httptest.Server, error) {
-	l, _ := net.Listen("tcp", "127.0.0.1:0")
-	ts := httptest.NewUnstartedServer(nil)
-	ts.Listener = l
-	ts.Config.Handler = handler(fmt.Sprintf("http://%s", ts.Listener.Addr().String()))
-
-	ts.Start()
-	return ts, nil
-}
-
 func areErrors(a, b any) bool {
 	_, ok1 := a.(error)
 	_, ok2 := b.(error)
@@ -154,39 +140,29 @@ var EquateWeakErrors = cmp.FilterValues(areErrors, cmp.Comparer(compareErrors))
 
 func TestOAuth2(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
-	type args struct {
-		cl      apClient
-		initFns []InitFn
-	}
 	tests := []struct {
-		name string
-		args args
-		want oauthLoader
+		name    string
+		initFns []InitFn
+		want    oauthLoader
 	}{
 		{
 			name: "empty",
-			args: args{},
 			want: oauthLoader{l: lw.Nil()},
 		},
 		{
-			name: "with logger",
-			args: args{cl: nil, initFns: []InitFn{WithLogger(mockLogger)}},
-			want: oauthLoader{l: mockLogger},
+			name:    "with logger",
+			initFns: []InitFn{WithLogger(mockLogger)},
+			want:    oauthLoader{l: mockLogger},
 		},
 		{
-			name: "with ignoreIRIs",
-			args: args{cl: nil, initFns: []InitFn{WithIgnoreList(ignoreIRIs...)}},
-			want: oauthLoader{ignore: ignoreIRIs, l: lw.Nil()},
-		},
-		{
-			name: "with storage",
-			args: args{cl: nil, initFns: []InitFn{WithStorage(st())}},
-			want: oauthLoader{st: st(), l: lw.Nil()},
+			name:    "with storage",
+			initFns: []InitFn{WithStorage(st())},
+			want:    oauthLoader{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := OAuth2(tt.args.cl, tt.args.initFns...); !cmp.Equal(got, tt.want, equateOAuthLoader) {
+			if got := OAuth2(tt.initFns...); !cmp.Equal(got, tt.want, equateOAuthLoader) {
 				t.Errorf("OAuth2() = %s", cmp.Diff(tt.want, got, equateOAuthLoader))
 			}
 		})
@@ -202,7 +178,17 @@ func areOAuthLoader(a, b any) bool {
 func compareOAuthLoader(x, y any) bool {
 	xe := x.(oauthLoader)
 	ye := y.(oauthLoader)
-	return compareConfig(config(xe), config(ye))
+	xst, _ := xe.st.(oauthStore)
+	yst, _ := ye.st.(oauthStore)
+	cx := config{
+		st: xst,
+		l:  xe.l,
+	}
+	cy := config{
+		st: yst,
+		l:  ye.l,
+	}
+	return compareConfig(cx, cy)
 }
 
 var equateOAuthLoader = cmp.FilterValues(areOAuthLoader, cmp.Comparer(compareOAuthLoader))

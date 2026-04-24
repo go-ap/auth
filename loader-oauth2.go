@@ -6,16 +6,24 @@ import (
 	"net/http"
 	"strings"
 
+	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/openshift/osin"
 )
 
-type oauthLoader config
+type oauthLoader struct {
+	st oauthStore
+	l  lw.Logger
+}
 
 // OAuth2
-func OAuth2(cl apClient, initFns ...InitFn) oauthLoader {
-	return oauthLoader(Config(cl, initFns...))
+func OAuth2(initFns ...InitFn) oauthLoader {
+	c := Config(initFns...)
+	return oauthLoader{
+		st: c.st,
+		l:  c.l,
+	}
 }
 
 var (
