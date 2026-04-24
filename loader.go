@@ -27,10 +27,9 @@ type ActivityPubClient interface {
 }
 
 type config struct {
-	ignore vocab.IRIs
-	c      ActivityPubClient
-	st     oauthStore
-	l      log.Logger
+	c  ActivityPubClient
+	st oauthStore
+	l  log.Logger
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
@@ -45,12 +44,6 @@ func Config(initFns ...InitFn) config {
 }
 
 type InitFn = func(*config)
-
-func WithIgnoreList(iris ...vocab.IRI) InitFn {
-	return func(conf *config) {
-		conf.ignore = iris
-	}
-}
 
 func WithLogger(l log.Logger) InitFn {
 	return func(conf *config) {
@@ -70,7 +63,7 @@ func WithClient(cl ActivityPubClient) InitFn {
 	}
 }
 
-func Resolver(initFns ...InitFn) actorResolver {
+func Verifier(initFns ...InitFn) actorResolver {
 	return actorResolver(Config(initFns...))
 }
 
@@ -104,11 +97,10 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 
 	switch typ {
 	case "Bearer":
-		ol := oauthLoader{st: a.st}
+		ol := oauthVerifier{st: a.st}
 		return ol.Verify(r)
 	case "Signature":
 		kl := httpSigVerifier{
-			ignore: a.ignore,
 			loader: keyLoader{c: a.c, st: a.st},
 			l:      a.l,
 		}

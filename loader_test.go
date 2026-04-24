@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
 	"unsafe"
@@ -38,11 +37,6 @@ func TestConfig(t *testing.T) {
 			want:    config{l: mockLogger},
 		},
 		{
-			name:    "with ignoreIRIs",
-			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
-			want:    config{ignore: ignoreIRIs, l: lw.Nil()},
-		},
-		{
 			name:    "with storage",
 			initFns: []InitFn{WithStorage(st())},
 			want:    config{st: st(), l: lw.Nil()},
@@ -70,9 +64,6 @@ func compareConfig(x, y any) bool {
 		return false
 	}
 	if !reflect.ValueOf(xe.l).Equal(reflect.ValueOf(ye.l)) {
-		return false
-	}
-	if !slices.Equal(xe.ignore, ye.ignore) {
 		return false
 	}
 	if xe.st == nil || ye.st == nil {
@@ -144,11 +135,6 @@ func TestResolver(t *testing.T) {
 			want:    actorResolver{l: mockLogger},
 		},
 		{
-			name:    "with ignoreIRIs",
-			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
-			want:    actorResolver{ignore: ignoreIRIs, l: lw.Nil()},
-		},
-		{
 			name:    "with storage",
 			initFns: []InitFn{WithStorage(st())},
 			want:    actorResolver{st: st(), l: lw.Nil()},
@@ -161,7 +147,7 @@ func TestResolver(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Resolver(tt.initFns...); !cmp.Equal(got, tt.want, equateResolver) {
+			if got := Verifier(tt.initFns...); !cmp.Equal(got, tt.want, equateResolver) {
 				t.Errorf("Resolver() = %s", cmp.Diff(tt.want, got, equateResolver))
 			}
 		})
@@ -227,16 +213,16 @@ func Test_actorResolver_Verify(t *testing.T) {
 		{
 			name: "good bearer",
 			a: actorResolver{
-				st: st(mockActor("http://example.com"), mockAccess("test", defaultClient)),
+				st: st(mockActor(), mockAccess("test", defaultClient)),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
 			r:    mockGetReq(url.Values{"Authorization": []string{"Bearer test"}}),
-			want: mockActor("http://example.com"),
+			want: mockActor(),
 		},
 		{
 			name: "bad signature",
 			a: actorResolver{
-				st: st(mockActor("http://example.com")),
+				st: st(mockActor()),
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			},
 			r:       mockGetReq(url.Values{"Signature": []string{"bad"}}),

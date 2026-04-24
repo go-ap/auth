@@ -22,214 +22,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func Test_keyLoader_LoadActorFromKeyIRI(t *testing.T) {
-	type fields struct {
-		iriIsLocal func(vocab.IRI) bool
-		ignore     vocab.IRIs
-		c          *client.C
-		st         oauthStore
-		l          lw.Logger
-	}
-	tests := []struct {
-		name      string
-		fields    fields
-		arg       vocab.IRI
-		handlerFn http.HandlerFunc
-		want      vocab.Actor
-		wantKey   *vocab.PublicKey
-		wantErr   error
-	}{
-		{
-			name:    "empty",
-			fields:  fields{},
-			want:    AnonymousActor,
-			wantKey: (*vocab.PublicKey)(nil),
-			wantErr: errInvalidClient,
-		},
-		{
-			name: "not found",
-			fields: fields{
-				iriIsLocal: isNotLocal,
-				c:          client.New(),
-				l:          lw.Dev(lw.SetOutput(t.Output())),
-				st:         st(),
-			},
-			handlerFn: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusNotFound)
-			},
-			arg:     vocab.IRI("http://example.com/~jdoe#main"),
-			want:    AnonymousActor,
-			wantKey: nil,
-			wantErr: errors.NotFoundf("unable to fetch actor"),
-		},
-		{
-			name: "local found actor",
-			fields: fields{
-				iriIsLocal: isNotLocal,
-				c:          client.New(),
-				l:          lw.Dev(lw.SetOutput(t.Output())),
-				st:         st(actorKeyMock(pubRSA), mockActor("http://example.com")),
-			},
-			arg:  vocab.IRI("http://example.com/~jdoe#main"),
-			want: mockActor("http://example.com"),
-			wantKey: func() *vocab.PublicKey {
-				k := mockActor("http://example.com").PublicKey
-				return &k
-			}(),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.handlerFn != nil {
-				srv := httptest.NewServer(tt.handlerFn)
-				tt.fields.c = client.New(client.WithHTTPClient(srv.Client()))
-			}
-			a := httpSigVerifier{
-				ignore: tt.fields.ignore,
-				loader: keyLoader{
-					c:  tt.fields.c,
-					st: tt.fields.st,
-				},
-				l: lw.Dev(lw.SetOutput(t.Output())),
-			}
-			act, key, err := a.LoadActorFromKeyIRI(tt.arg)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("LoadActorFromKeyIRI() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
-			if !cmp.Equal(act, tt.want, EquateItems) {
-				t.Errorf("LoadActorFromKeyIRI() got actor = %s", cmp.Diff(tt.want, act, EquateItems))
-			}
-			if !cmp.Equal(key, tt.wantKey) {
-				t.Errorf("LoadActorFromKeyIRI() got key = %s", cmp.Diff(tt.wantKey, key))
-			}
-		})
-	}
-}
-
-func Test_keyLoader_GetKey(t *testing.T) {
-	type result struct {
-		act vocab.Actor
-		key crypto.PublicKey
-	}
-	type fields struct {
-		baseURL    string
-		iriIsLocal func(vocab.IRI) bool
-		ignore     vocab.IRIs
-		st         oauthStore
-	}
-	tests := []struct {
-		name      string
-		fields    fields
-		arg       string
-		handlerFn http.HandlerFunc
-		want      result
-		wantErr   error
-	}{
-		{
-			name:    "empty",
-			wantErr: errors.Newf("empty IRI"),
-		},
-		{
-			name: "ignored url",
-			fields: fields{
-				ignore: vocab.IRIs{"http://example.com/~jdoe"},
-			},
-			arg:     "http://example.com/~jdoe",
-			wantErr: errors.Forbiddenf("actor is blocked"),
-		},
-		{
-			name: "ignored host",
-			fields: fields{
-				ignore: vocab.IRIs{"http://example.com"},
-			},
-			arg:     "http://example.com/~jdoe",
-			wantErr: errors.Forbiddenf("actor is blocked"),
-		},
-		{
-			name: "remote key IRI as separate resource",
-			arg:  "http://example.com/~jdoe/key",
-			handlerFn: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				actor := mockActor("http://" + r.Host)
-				actor.PublicKey.ID = vocab.IRI("http://" + r.Host + "/~jdoe/key")
-
-				payload, _ := vocab.MarshalJSON(actor)
-				if strings.HasSuffix(r.URL.Path, "/key") {
-					payload, _ = jsonld.Marshal(actor.PublicKey)
-				}
-
-				w.Header().Set("Cache-Control", "public")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write(payload)
-			}),
-			want: result{
-				act: vocab.Actor{
-					ID:   vocab.IRI("http://example.com/~jdoe"),
-					Type: vocab.PersonType,
-					PublicKey: vocab.PublicKey{
-						ID:           vocab.IRI("http://example.com/~jdoe/key"),
-						Owner:        vocab.IRI("http://example.com/~jdoe"),
-						PublicKeyPem: pemEncodePublicKey(prv),
-					},
-				},
-				key: prv.Public(),
-			},
-		},
-		{
-			name: "remote key IRI as actor resource",
-			arg:  "http://example.com/~jdoe#main",
-			want: result{
-				act: mockActor("http://example.com"),
-				key: prv.Public(),
-			},
-			handlerFn: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				status := http.StatusOK
-				actor := mockActor("http://example.com")
-				payload, _ := jsonld.Marshal(actor)
-
-				w.Header().Set("Cache-Control", "public")
-				w.WriteHeader(status)
-				_, _ = w.Write(payload)
-			}),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(tt.handlerFn)
-			if tt.fields.st == nil {
-				tt.fields.st = st()
-			}
-			k := &httpSigVerifier{
-				l: lw.Dev(lw.SetOutput(t.Output())),
-				loader: keyLoader{
-					c:  client.New(client.WithHTTPClient(srv.Client())),
-					st: tt.fields.st,
-				},
-				ignore: tt.fields.ignore,
-			}
-
-			act, key, err := k.GetKey(tt.arg)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("GetKey() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr != nil {
-				return
-			}
-			if !cmp.Equal(act, tt.want.act) {
-				t.Errorf("GetKey() got actor = %s", cmp.Diff(tt.want.act, act))
-			}
-			if !cmp.Equal(key, tt.want.key) {
-				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.want.key, key))
-			}
-		})
-	}
-}
-
 func TestHTTPSignature(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
-	type args struct {
-		cl ActivityPubClient
-	}
 	tests := []struct {
 		name    string
 		initFns []InitFn
@@ -243,11 +37,6 @@ func TestHTTPSignature(t *testing.T) {
 			name:    "with logger",
 			initFns: []InitFn{WithLogger(mockLogger)},
 			want:    httpSigVerifier{l: mockLogger},
-		},
-		{
-			name:    "with ignoreIRIs",
-			initFns: []InitFn{WithIgnoreList(ignoreIRIs...)},
-			want:    httpSigVerifier{ignore: ignoreIRIs, l: lw.Nil()},
 		},
 		{
 			name:    "with storage",
@@ -276,23 +65,21 @@ func compareKeyLoader(x, y any) bool {
 	xst, _ := xe.loader.st.(oauthStore)
 	yst, _ := ye.loader.st.(oauthStore)
 	cx := config{
-		ignore: xe.ignore,
-		c:      xe.loader.c,
-		st:     xst,
-		l:      xe.l,
+		c:  xe.loader.c,
+		st: xst,
+		l:  xe.l,
 	}
 	cy := config{
-		ignore: ye.ignore,
-		c:      ye.loader.c,
-		st:     yst,
-		l:      ye.l,
+		c:  ye.loader.c,
+		st: yst,
+		l:  ye.l,
 	}
 	return compareConfig(cx, cy)
 }
 
 var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))
 
-func Test_keyLoader_Verify(t *testing.T) {
+func Test_httpSigVerifier_Verify(t *testing.T) {
 	tests := []struct {
 		name    string
 		a       httpSigVerifier
@@ -524,58 +311,6 @@ func comparePubKeys(x, y any) bool {
 
 var EquatePublicKeys = cmp.FilterValues(arePubKeys, cmp.Comparer(comparePubKeys))
 
-func Test_keyLoader_iriIsIgnored(t *testing.T) {
-	tests := []struct {
-		name string
-		k    httpSigVerifier
-		iri  vocab.IRI
-		want bool
-	}{
-		{
-			name: "empty",
-			k:    httpSigVerifier{},
-			want: false,
-		},
-		{
-			name: "nil ignored",
-			k:    httpSigVerifier{},
-			iri:  "http://example.com",
-			want: false,
-		},
-		{
-			name: "empty ignored",
-			k: httpSigVerifier{
-				ignore: []vocab.IRI{},
-			},
-			iri:  "http://example.com",
-			want: false,
-		},
-		{
-			name: "is ignored",
-			k: httpSigVerifier{
-				ignore: []vocab.IRI{"http://example.com"},
-			},
-			iri:  "http://example.com",
-			want: true,
-		},
-		{
-			name: "is substring ignored",
-			k: httpSigVerifier{
-				ignore: []vocab.IRI{"http://example.com"},
-			},
-			iri:  "http://example.com/~jdoe",
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.k.iriIsIgnored(tt.iri); got != tt.want {
-				t.Errorf("iriIsIgnored() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_compatibleDraftVerifyAlgorithms(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -678,7 +413,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				iri: "http://example.com/~jdoe/key",
 			},
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
-				actor := mockActor("http://example.com")
+				actor := mockActor()
 				if strings.HasSuffix(r.URL.Path, "/key") {
 					actor.PublicKey.ID = "http://example.com/~jdoe/key"
 					payload, _ := jsonld.Marshal(actor.PublicKey)
@@ -704,7 +439,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				iri: "http://example.com/~jdoe/key",
 			},
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
-				actor := mockActor("http://example.com")
+				actor := mockActor()
 				payload, _ := vocab.MarshalJSON(actor)
 				if strings.HasSuffix(r.URL.Path, "/key") {
 					actor.PublicKey.ID = "http://example.com/~jdoe/key"
@@ -714,7 +449,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write(payload)
 			},
-			want: mockActor("http://example.com"),
+			want: mockActor(),
 			wantKey: func() *vocab.PublicKey {
 				p := mockActorKey("http://example.com/~jdoe/key", "http://example.com/~jdoe", prv)
 				return &p
@@ -727,13 +462,13 @@ func TestLoadRemoteKey(t *testing.T) {
 				iri: "http://example.com/~jdoe#main",
 			},
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
-				actor := mockActor("http://example.com")
+				actor := mockActor()
 				payload, _ := vocab.MarshalJSON(actor)
 				w.Header().Set("Cache-Control", "public")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write(payload)
 			},
-			want: mockActor("http://example.com"),
+			want: mockActor(),
 			wantKey: func() *vocab.PublicKey {
 				p := mockActorKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prv)
 				return &p

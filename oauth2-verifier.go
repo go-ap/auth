@@ -12,15 +12,15 @@ import (
 	"github.com/openshift/osin"
 )
 
-type oauthLoader struct {
+type oauthVerifier struct {
 	st oauthStore
 	l  lw.Logger
 }
 
 // OAuth2
-func OAuth2(initFns ...InitFn) oauthLoader {
+func OAuth2(initFns ...InitFn) oauthVerifier {
 	c := Config(initFns...)
-	return oauthLoader{
+	return oauthVerifier{
 		st: c.st,
 		l:  c.l,
 	}
@@ -31,7 +31,7 @@ var (
 	errInvalidClient  = errors.Newf("invalid client")
 )
 
-func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
+func (k oauthVerifier) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	act := AnonymousActor
 	if k.st == nil {
 		return act, errInvalidStorage
@@ -67,7 +67,7 @@ func (k oauthLoader) VerifyAccessCode(tok string) (vocab.Actor, error) {
 	return act, nil
 }
 
-func (k oauthLoader) Verify(r *http.Request) (vocab.Actor, error) {
+func (k oauthVerifier) Verify(r *http.Request) (vocab.Actor, error) {
 	if r == nil || r.Header == nil {
 		return AnonymousActor, nil
 	}

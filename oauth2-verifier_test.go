@@ -8,12 +8,10 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
-	"github.com/go-ap/jsonld"
 	"github.com/google/go-cmp/cmp"
 
 	"git.sr.ht/~mariusor/lw"
@@ -43,7 +41,7 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := oauthLoader{
+			s := oauthVerifier{
 				st: tt.fields.st,
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			}
@@ -58,10 +56,6 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 			}
 		})
 	}
-}
-
-func isNotLocal(_ vocab.IRI) bool {
-	return false
 }
 
 var prv, _ = rsa.GenerateKey(rand.Reader, 1024)
@@ -88,37 +82,13 @@ func mockActorKey(id, owner vocab.IRI, prv *rsa.PrivateKey) vocab.PublicKey {
 	}
 }
 
-func mockActor(base string) vocab.Actor {
-	iri := vocab.IRI(base + "/~jdoe")
+func mockActor() vocab.Actor {
+	iri := vocab.IRI("http://example.com/~jdoe")
 	return vocab.Actor{
 		ID:        iri,
 		Type:      vocab.PersonType,
 		PublicKey: mockActorKey(iri+"#main", iri, prv),
 	}
-}
-
-func mockKeyAndActorHandler(base string) http.Handler {
-	actor := mockActor(base)
-	res := make(map[string][]byte)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		status := http.StatusNotModified
-		payload, ok := res[r.URL.Path]
-
-		if !ok {
-			status = http.StatusOK
-			payload, _ = jsonld.Marshal(actor)
-			if filepath.Base(r.URL.Path) == "key" {
-				actor.PublicKey.ID = vocab.IRI(base + "/~jdoe/key")
-				payload, _ = jsonld.Marshal(actor.PublicKey)
-			}
-			res[r.URL.Path] = payload
-		}
-
-		w.Header().Set("Cache-Control", "public")
-		w.WriteHeader(status)
-		_, _ = w.Write(payload)
-	})
 }
 
 func areErrors(a, b any) bool {
@@ -143,41 +113,41 @@ func TestOAuth2(t *testing.T) {
 	tests := []struct {
 		name    string
 		initFns []InitFn
-		want    oauthLoader
+		want    oauthVerifier
 	}{
 		{
 			name: "empty",
-			want: oauthLoader{l: lw.Nil()},
+			want: oauthVerifier{l: lw.Nil()},
 		},
 		{
 			name:    "with logger",
 			initFns: []InitFn{WithLogger(mockLogger)},
-			want:    oauthLoader{l: mockLogger},
+			want:    oauthVerifier{l: mockLogger},
 		},
 		{
 			name:    "with storage",
 			initFns: []InitFn{WithStorage(st())},
-			want:    oauthLoader{st: st(), l: lw.Nil()},
+			want:    oauthVerifier{st: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := OAuth2(tt.initFns...); !cmp.Equal(got, tt.want, equateOAuthLoader) {
-				t.Errorf("OAuth2() = %s", cmp.Diff(tt.want, got, equateOAuthLoader))
+			if got := OAuth2(tt.initFns...); !cmp.Equal(got, tt.want, equateOAuthVerifier) {
+				t.Errorf("OAuth2() = %s", cmp.Diff(tt.want, got, equateOAuthVerifier))
 			}
 		})
 	}
 }
 
-func areOAuthLoader(a, b any) bool {
-	_, ok1 := a.(oauthLoader)
-	_, ok2 := b.(oauthLoader)
+func areOAuthVerifier(a, b any) bool {
+	_, ok1 := a.(oauthVerifier)
+	_, ok2 := b.(oauthVerifier)
 	return ok1 && ok2
 }
 
-func compareOAuthLoader(x, y any) bool {
-	xe := x.(oauthLoader)
-	ye := y.(oauthLoader)
+func compareOAuthVerifier(x, y any) bool {
+	xe := x.(oauthVerifier)
+	ye := y.(oauthVerifier)
 	xst, _ := xe.st.(oauthStore)
 	yst, _ := ye.st.(oauthStore)
 	cx := config{
@@ -191,25 +161,25 @@ func compareOAuthLoader(x, y any) bool {
 	return compareConfig(cx, cy)
 }
 
-var equateOAuthLoader = cmp.FilterValues(areOAuthLoader, cmp.Comparer(compareOAuthLoader))
+var equateOAuthVerifier = cmp.FilterValues(areOAuthVerifier, cmp.Comparer(compareOAuthVerifier))
 
-func Test_oauthLoader_Verify(t *testing.T) {
+func Test_oauthVerifier_Verify(t *testing.T) {
 	tests := []struct {
 		name    string
-		a       oauthLoader
+		a       oauthVerifier
 		r       *http.Request
 		want    vocab.Actor
 		wantErr error
 	}{
 		{
 			name: "nil request",
-			a:    oauthLoader{l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:    oauthVerifier{l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:    nil,
 			want: AnonymousActor,
 		},
 		{
 			name:    "no header",
-			a:       oauthLoader{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       oauthVerifier{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("could not load bearer token from request"),

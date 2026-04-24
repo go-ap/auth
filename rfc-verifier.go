@@ -99,7 +99,7 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 		//
 		// 6.4. If the algorithm is explicitly stated in the signature parameters using a value
 		// from the "HTTP Signature Algorithms" registry, the verifier will use the referenced algorithm.
-		actor, aKey, err := k.loader.Load(vocab.IRI(msg.Input.KeyID))
+		actor, aKey, err := k.loader.loadKey(msg.Input.KeyID)
 		if err != nil {
 			errs = append(errs, err)
 			continue
