@@ -1,13 +1,13 @@
 package auth
 
 import (
+	"crypto"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 
 	"git.sr.ht/~mariusor/lw"
 	vocab "github.com/go-ap/activitypub"
@@ -17,8 +17,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/openshift/osin"
 )
-
-var ignoreIRIs = vocab.IRIs{"http://example.com", "http://example.com/~djoe"}
 
 func TestConfig(t *testing.T) {
 	mockLogger := lw.Dev(lw.SetOutput(t.Output()))
@@ -74,18 +72,6 @@ func compareConfig(x, y any) bool {
 
 var equateConfig = cmp.FilterValues(areConfig, cmp.Comparer(compareConfig))
 
-func areFuncs(a, b any) bool {
-	ta := reflect.TypeOf(a)
-	tb := reflect.TypeOf(b)
-	return ta != nil && ta.Kind() == reflect.Func && tb != nil && tb.Kind() == reflect.Func
-}
-
-func compareFuncs(x, y any) bool {
-	px := *(*unsafe.Pointer)(unsafe.Pointer(&x))
-	py := *(*unsafe.Pointer)(unsafe.Pointer(&y))
-	return px == py
-}
-
 func st(el ...any) mockStore {
 	s := mockStore{}
 	for _, in := range el {
@@ -95,6 +81,9 @@ func st(el ...any) mockStore {
 		if ac, ok := in.(osin.AccessData); ok {
 			s.ac = ac
 		}
+		if pk, ok := in.(crypto.PrivateKey); ok {
+			s.pk = pk
+		}
 	}
 	return s
 }
@@ -102,6 +91,7 @@ func st(el ...any) mockStore {
 type mockStore struct {
 	it vocab.Item
 	ac osin.AccessData
+	pk crypto.PrivateKey
 }
 
 func (ms mockStore) Load(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) {
@@ -109,6 +99,13 @@ func (ms mockStore) Load(iri vocab.IRI, _ ...filters.Check) (vocab.Item, error) 
 		return nil, errors.NotFoundf("not found")
 	}
 	return ms.it, nil
+}
+
+func (ms mockStore) LoadKey(iri vocab.IRI) (crypto.PrivateKey, error) {
+	if ms.pk != nil {
+		return nil, errors.NotFoundf("not found")
+	}
+	return ms.pk, nil
 }
 
 func (ms mockStore) LoadAccess(tok string) (*osin.AccessData, error) {

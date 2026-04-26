@@ -1,13 +1,17 @@
 package auth
 
 import (
+	"crypto"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"net/url"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/go-ap/activitypub"
+	"github.com/common-fate/httpsig/sigparams"
+	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
@@ -55,6 +59,54 @@ func Test_syncedNonceStore_Seen(t *testing.T) {
 	}
 }
 
+var ()
+
+// NOTE(marius): these values also come from the Test Cases appendix of RFC9421 HTTP-Signature doc
+// https://www.rfc-editor.org/rfc/rfc9421.html#name-test-cases
+func rfcMockReq(hh ...url.Values) *http.Request {
+	rfcHdrs := url.Values{
+		"Date":         []string{"Tue, 20 Apr 2021 02:07:55 GMT"},
+		"Content-Type": []string{"application/json"},
+		"Digest":       []string{"sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:"},
+	}
+	for _, h := range hh {
+		for k, v := range h {
+			rfcHdrs[k] = v
+		}
+	}
+	r := mockPostReq([]byte(`{"hello": "world"}`), rfcHdrs)
+	r.URL.Path = "/foo"
+	r.URL.RawQuery = "param=Value&Pet=dog"
+	return r
+}
+
+func mockRFCActor(prv privateKey, keyId vocab.IRI) vocab.Actor {
+	iri := vocab.IRI("http://example.com/~jdoe")
+	return vocab.Actor{
+		ID:        iri,
+		Type:      vocab.PersonType,
+		PublicKey: mockActorGenKey(vocab.IRI(keyId), iri, prv),
+	}
+}
+
+type privateKey interface {
+	Public() crypto.PublicKey
+}
+
+func mockActorGenKey(id, owner vocab.IRI, prv privateKey) vocab.PublicKey {
+	pubKey := prv.Public()
+	pubEnc, _ := x509.MarshalPKIXPublicKey(pubKey)
+	p := pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubEnc,
+	}
+
+	return vocab.PublicKey{
+		ID:           id,
+		Owner:        owner,
+		PublicKeyPem: string(pem.EncodeToMemory(&p)),
+	}
+}
 func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 	initKeyLoader := func(initFns ...InitFn) httpSigVerifier {
 		nonceStore = new(syncedNonceStore)
@@ -73,10 +125,11 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		opts    *sigparams.ValidateOpts
 		initFns []InitFn
 		req     *http.Request
 		created time.Time
-		want    activitypub.Actor
+		want    vocab.Actor
 		wantErr error
 	}{
 		{
@@ -159,10 +212,27 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 				"no matching signatures",
 			),
 		},
+		{
+			name:    "minimal signature using rsa-sha512 example - no nonce",
+			created: time.UnixMicro(1618884473 * 1000 * 1000),
+			initFns: []InitFn{
+				WithClient(client.New()),
+				WithStorage(st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
+			},
+			req: rfcMockReq(url.Values{
+				"Signature-Input": []string{`sig-b22=("@authority" "content-digest" "@query-param";name="Pet");created=1618884473;keyid="http://example.com/~jdoe#main";tag="header-example"`},
+				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
+			}),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(errors.Newf("nonce is required"), "no matching signatures"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := initKeyLoader(tt.initFns...)
+			if tt.opts != nil {
+				defaultValidationOpts = *tt.opts
+			}
 			if !tt.created.IsZero() {
 				nowFn = func() time.Time {
 					return tt.created

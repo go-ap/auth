@@ -112,17 +112,12 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 		}
 		var alg rfc.Algorithm
 		switch pk := key.(type) {
-		case *rsa.PrivateKey:
-			alg = alg_rsa.NewRSAPSS512Verifier(&pk.PublicKey)
-		case *ecdsa.PrivateKey:
-			alg = alg_ecdsa.P384{
-				PublicKey: &pk.PublicKey,
-			}
-		case ed25519.PrivateKey:
-			pub, _ := pk.Public().(ed25519.PublicKey)
-			alg = alg_ed25519.Ed25519{
-				PublicKey: pub,
-			}
+		case *rsa.PublicKey:
+			alg = alg_rsa.NewRSAPSS512Verifier(pk)
+		case *ecdsa.PublicKey:
+			alg = alg_ecdsa.P384{PublicKey: pk}
+		case ed25519.PublicKey:
+			alg = alg_ed25519.Ed25519{PublicKey: pk}
 		}
 
 		// 6.5. If the algorithm is specified in more than one location (e.g., a combination of static

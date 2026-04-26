@@ -30,27 +30,15 @@ func HTTPSignature(initFns ...InitFn) httpSigVerifier {
 	return v
 }
 
+var errInvalidRequest = errors.Newf("invalid request")
+
 func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, error) {
+	if r == nil {
+		return AnonymousActor, errInvalidRequest
+	}
 	v, err := draft.NewVerifier(r)
 	if err != nil {
 		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
-	}
-
-	draftVerifyFn := func(pubKey *vocab.PublicKey) error {
-		pk, err := toCryptoPublicKey(*pubKey)
-		if err != nil {
-			return errors.Annotatef(err, "invalid public key")
-		}
-
-		algs := compatibleDraftVerifyAlgorithms(pk)
-		errs := make([]error, 0, len(algs))
-		for _, algo := range algs {
-			if err = v.Verify(pk, algo); err == nil {
-				return nil
-			}
-			errs = append(errs, errors.Annotatef(err, "failed %s", algo))
-		}
-		return errors.Join(errs...)
 	}
 
 	actor, key, err := k.loader.loadKey(v.KeyId())
@@ -58,10 +46,21 @@ func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, err
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
 
-	if err = draftVerifyFn(key); err != nil {
-		return AnonymousActor, err
+	pk, err := toCryptoPublicKey(*key)
+	if err != nil {
+		return AnonymousActor, errors.Annotatef(err, "invalid public key")
 	}
-	return actor, nil
+
+	algs := compatibleDraftVerifyAlgorithms(pk)
+	errs := make([]error, 0, len(algs))
+	for _, algo := range algs {
+		if err = v.Verify(pk, algo); err != nil {
+			errs = append(errs, errors.Annotatef(err, "failed %s", algo))
+			continue
+		}
+		return actor, nil
+	}
+	return AnonymousActor, errors.Join(errs...)
 }
 
 func (k httpSigVerifier) Verify(r *http.Request) (vocab.Actor, error) {

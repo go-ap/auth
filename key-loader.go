@@ -2,11 +2,11 @@ package auth
 
 import (
 	"context"
+	"crypto"
 	"io"
 	"net/http"
 
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 )
@@ -27,12 +27,16 @@ func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, 
 	if k.c == nil {
 		return AnonymousActor, nil, errInvalidClient
 	}
-
-	cl := client.HTTPClient(k.c)
-	if cl == nil {
-		return AnonymousActor, nil, errInvalidClient
+	if iri == "" {
+		return AnonymousActor, nil, errEmptyIRI
 	}
-	resp, err := cl.Get(iri.String())
+
+	req, err := http.NewRequest(http.MethodGet, string(iri), nil)
+	if err != nil {
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request")
+	}
+
+	resp, err := k.c.Do(req)
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key")
 	}
@@ -92,6 +96,10 @@ func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, 
 	return act, key, nil
 }
 
+type privateKeyLoader interface {
+	LoadKey(iri vocab.IRI) (crypto.PrivateKey, error)
+}
+
 func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
 		return AnonymousActor, nil, errInvalidStorage
@@ -128,9 +136,6 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 }
 
 func (k keyLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
-	if keyID == "" {
-		return AnonymousActor, nil, errEmptyIRI
-	}
 	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
 	actor, key, _ := k.loadLocalKey(vocab.IRI(keyID))
 	if key != nil {
