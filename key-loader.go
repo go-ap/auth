@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto"
 	"io"
 	"net/http"
 
@@ -13,17 +12,21 @@ import (
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
 func LoadRemoteKey(_ context.Context, c ActivityPubClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	return keyLoader{c: c}.loadRemoteKey(iri)
+	return localRemoteLoader{c: c}.loadRemoteKey(iri)
 }
 
-type keyLoader struct {
+type keyLoader interface {
+	loadKey(string) (vocab.Actor, *vocab.PublicKey, error)
+}
+
+type localRemoteLoader struct {
 	c  ActivityPubClient
 	st readStore
 }
 
 var errEmptyIRI = errors.Newf("empty IRI")
 
-func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.c == nil {
 		return AnonymousActor, nil, errInvalidClient
 	}
@@ -96,11 +99,7 @@ func (k keyLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, 
 	return act, key, nil
 }
 
-type privateKeyLoader interface {
-	LoadKey(iri vocab.IRI) (crypto.PrivateKey, error)
-}
-
-func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func (k localRemoteLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.st == nil {
 		return AnonymousActor, nil, errInvalidStorage
 	}
@@ -135,7 +134,7 @@ func (k keyLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, e
 	return act, key, nil
 }
 
-func (k keyLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
+func (k localRemoteLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
 	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
 	actor, key, _ := k.loadLocalKey(vocab.IRI(keyID))
 	if key != nil {

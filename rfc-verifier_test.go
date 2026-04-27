@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"git.sr.ht/~mariusor/lw"
 	"github.com/common-fate/httpsig/sigparams"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
@@ -85,7 +86,7 @@ func mockRFCActor(prv privateKey, keyId vocab.IRI) vocab.Actor {
 	return vocab.Actor{
 		ID:        iri,
 		Type:      vocab.PersonType,
-		PublicKey: mockActorGenKey(vocab.IRI(keyId), iri, prv),
+		PublicKey: mockActorGenKey(keyId, iri, prv),
 	}
 }
 
@@ -107,26 +108,28 @@ func mockActorGenKey(id, owner vocab.IRI, prv privateKey) vocab.PublicKey {
 		PublicKeyPem: string(pem.EncodeToMemory(&p)),
 	}
 }
-func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
-	initKeyLoader := func(initFns ...InitFn) httpSigVerifier {
-		nonceStore = new(syncedNonceStore)
-		c := config{}
-		for _, fn := range initFns {
-			fn(&c)
-		}
-		return httpSigVerifier{
-			loader: keyLoader{
-				c:  c.c,
-				st: c.st,
-			},
-			l: c.l,
-		}
-	}
 
+type mockLoader struct {
+	it vocab.Actor
+}
+
+func (m mockLoader) loadKey(_ string) (vocab.Actor, *vocab.PublicKey, error) {
+	return m.it, &m.it.PublicKey, nil
+}
+
+func ldr(c ActivityPubClient, st oauthStore) localRemoteLoader {
+	return localRemoteLoader{c: c, st: st}
+}
+
+func mldr(it vocab.Actor) mockLoader {
+	return mockLoader{it: it}
+}
+
+func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 	tests := []struct {
 		name    string
 		opts    *sigparams.ValidateOpts
-		initFns []InitFn
+		loader  keyLoader
 		req     *http.Request
 		created time.Time
 		want    vocab.Actor
@@ -186,19 +189,20 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 			wantErr: errors.Newf(`no matching signatures: created timestamp 0001-01-01 00:00:00 +0000 UTC was earlier than earliest allowed value %s`, time.Now().Truncate(time.Second).Add(-time.Minute).UTC()),
 		},
 		{
-			name:    "GET rfc9421 - B.2.1. example, no client",
+			name:    "GET rfc9421 - B.2.1. example - wrong private key",
 			created: time.UnixMicro(1618884473 * 1000 * 1000),
+			loader:  mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss")},
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
 			}),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errInvalidClient, "no matching signatures"),
+			wantErr: errors.Annotatef(errors.Newf("verifying signature: crypto/rsa: verification error"), "no matching signatures"),
 		},
 		{
 			name:    "GET rfc9421 - B.2.1. example, w/ client",
 			created: time.UnixMicro(1618884473 * 1000 * 1000),
-			initFns: []InitFn{WithClient(client.New())},
+			loader:  ldr(client.New(), nil),
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
@@ -215,10 +219,8 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		{
 			name:    "minimal signature using rsa-sha512 example - no nonce",
 			created: time.UnixMicro(1618884473 * 1000 * 1000),
-			initFns: []InitFn{
-				WithClient(client.New()),
-				WithStorage(st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
-			},
+			opts:    &sigparams.ValidateOpts{RequireNonce: true},
+			loader:  ldr(client.New(), st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b22=("@authority" "content-digest" "@query-param";name="Pet");created=1618884473;keyid="http://example.com/~jdoe#main";tag="header-example"`},
 				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
@@ -226,10 +228,26 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 			want:    AnonymousActor,
 			wantErr: errors.Annotatef(errors.Newf("nonce is required"), "no matching signatures"),
 		},
+		{
+			name:    "minimal signature using rsa-sha512 example",
+			created: time.UnixMicro(1618884473 * 1000 * 1000),
+			opts: &sigparams.ValidateOpts{
+				BeforeDuration: time.Minute,
+				RequireNonce:   false,
+			},
+			loader: mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519")),
+			req: rfcMockReq(url.Values{
+				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
+				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},
+			}),
+			want: mockRFCActor(prvKeyEd25519, "test-key-ed25519"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := initKeyLoader(tt.initFns...)
+			nonceStore = new(syncedNonceStore)
+
+			k := httpSigVerifier{loader: tt.loader, l: lw.Dev(lw.SetOutput(t.Output()))}
 			if tt.opts != nil {
 				defaultValidationOpts = *tt.opts
 			}

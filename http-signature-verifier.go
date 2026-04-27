@@ -24,7 +24,7 @@ type httpSigVerifier struct {
 func HTTPSignature(initFns ...InitFn) httpSigVerifier {
 	c := Config(initFns...)
 	v := httpSigVerifier{
-		loader: keyLoader{c: c.c, st: c.st},
+		loader: localRemoteLoader{c: c.c, st: c.st},
 		l:      c.l,
 	}
 	return v
@@ -64,7 +64,7 @@ func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, err
 }
 
 func (k httpSigVerifier) Verify(r *http.Request) (vocab.Actor, error) {
-	if k.loader.st == nil {
+	if k.loader == nil {
 		return AnonymousActor, errInvalidStorage
 	}
 	if r == nil || r.Header == nil {

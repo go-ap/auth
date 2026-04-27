@@ -43,7 +43,7 @@ func TestHTTPSignature(t *testing.T) {
 		{
 			name:    "with storage",
 			initFns: []InitFn{WithStorage(st())},
-			want:    httpSigVerifier{loader: keyLoader{st: st()}, l: lw.Nil()},
+			want:    httpSigVerifier{loader: localRemoteLoader{st: st()}, l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -64,17 +64,17 @@ func areKeyLoader(a, b any) bool {
 func compareKeyLoader(x, y any) bool {
 	xe := x.(httpSigVerifier)
 	ye := y.(httpSigVerifier)
-	xst, _ := xe.loader.st.(oauthStore)
-	yst, _ := ye.loader.st.(oauthStore)
+	//xst, _ := xe.loader.(oauthStore)
+	//yst, _ := ye.loader.(oauthStore)
 	cx := config{
-		c:  xe.loader.c,
-		st: xst,
-		l:  xe.l,
+		//c:  xe.loader.c,
+		//st: xst,
+		l: xe.l,
 	}
 	cy := config{
-		c:  ye.loader.c,
-		st: yst,
-		l:  ye.l,
+		//c:  ye.loader.c,
+		//st: yst,
+		l: ye.l,
 	}
 	return compareConfig(cx, cy)
 }
@@ -98,7 +98,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		},
 		{
 			name:    "no header",
-			a:       httpSigVerifier{loader: keyLoader{st: st()}, l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       httpSigVerifier{loader: localRemoteLoader{st: st()}, l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
@@ -591,7 +591,7 @@ func Test_httpSigVerifier_VerifyDraftSignature(t *testing.T) {
 	testActor.ID = "Test"
 	testActor.PublicKey.ID = "Test"
 	type fields struct {
-		loader keyLoader
+		loader localRemoteLoader
 	}
 	tests := []struct {
 		name    string
@@ -632,7 +632,7 @@ func Test_httpSigVerifier_VerifyDraftSignature(t *testing.T) {
 		{
 			name: "good signature",
 			fields: fields{
-				loader: keyLoader{
+				loader: localRemoteLoader{
 					st: st(cavageActor, mockActorKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", cavagePrvKeyRSA), cavagePrvKeyRSA),
 				},
 			},

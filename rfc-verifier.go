@@ -41,7 +41,7 @@ var defaultValidationOpts = sigparams.ValidateOpts{
 	ForbidClientSideAlg:       false,
 	BeforeDuration:            time.Minute,
 	RequiredCoveredComponents: map[string]bool{},
-	RequireNonce:              true,
+	RequireNonce:              false,
 }
 
 // VerifyRFCSignature checks for RFC9421 compatible HTTP signatures.

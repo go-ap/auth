@@ -54,7 +54,7 @@ func Test_keyLoader_loadKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(tt.handlerFn)
-			k := &keyLoader{
+			k := &localRemoteLoader{
 				c:  client.New(client.WithHTTPClient(srv.Client())),
 				st: tt.storage,
 			}
@@ -134,7 +134,7 @@ func Test_keyLoader_loadRemoteKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(tt.handlerFn)
-			k := &keyLoader{
+			k := &localRemoteLoader{
 				c:  client.New(client.WithHTTPClient(srv.Client())),
 				st: tt.storage,
 			}
@@ -211,7 +211,7 @@ func Test_keyLoader_loadLocalKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := keyLoader{
+			k := localRemoteLoader{
 				c:  tt.fields.c,
 				st: tt.fields.st,
 			}
