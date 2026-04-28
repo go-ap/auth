@@ -24,7 +24,7 @@ type httpSigVerifier struct {
 func HTTPSignature(initFns ...InitFn) httpSigVerifier {
 	c := Config(initFns...)
 	v := httpSigVerifier{
-		loader: localRemoteLoader{c: c.c, st: c.st},
+		loader: &localRemoteLoader{c: c.c, st: c.st},
 		l:      c.l,
 	}
 	return v
@@ -36,6 +36,10 @@ func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, err
 	if r == nil {
 		return AnonymousActor, errInvalidRequest
 	}
+	if k.loader == nil {
+		return AnonymousActor, errInvalidClient
+	}
+
 	v, err := draft.NewVerifier(r)
 	if err != nil {
 		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
@@ -87,11 +91,29 @@ func (k httpSigVerifier) Verify(r *http.Request) (vocab.Actor, error) {
 }
 
 func compatibleDraftVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm {
-	switch pubKey.(type) {
+	switch k := pubKey.(type) {
 	case *rsa.PublicKey:
-		return []draft.Algorithm{draft.RSA_SHA256, draft.RSA_SHA512}
+		switch k.Size() {
+		case 128, 256:
+			return []draft.Algorithm{draft.RSA_SHA256}
+		case 384:
+			return []draft.Algorithm{draft.RSA_SHA384}
+		case 512:
+			return []draft.Algorithm{draft.RSA_SHA512}
+		}
+		return []draft.Algorithm{}
 	case *ecdsa.PublicKey:
-		return []draft.Algorithm{draft.ECDSA_SHA512, draft.ECDSA_SHA256}
+		if p := k.Params(); p != nil {
+			switch p.BitSize {
+			case 256:
+				return []draft.Algorithm{draft.ECDSA_SHA256}
+			case 384:
+				return []draft.Algorithm{draft.ECDSA_SHA384}
+			case 512:
+				return []draft.Algorithm{draft.ECDSA_SHA512}
+			}
+		}
+		return []draft.Algorithm{}
 	case ed25519.PublicKey:
 		return []draft.Algorithm{draft.ED25519}
 	}

@@ -2,9 +2,14 @@ package auth
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"io"
 	"net/http"
 
+	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
@@ -12,7 +17,7 @@ import (
 
 // LoadRemoteKey fetches a remote Public Key and returns it's owner.
 func LoadRemoteKey(_ context.Context, c ActivityPubClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	return localRemoteLoader{c: c}.loadRemoteKey(iri)
+	return (&localRemoteLoader{c: c}).loadRemoteKey(iri)
 }
 
 type keyLoader interface {
@@ -20,8 +25,9 @@ type keyLoader interface {
 }
 
 type localRemoteLoader struct {
-	c  ActivityPubClient
-	st readStore
+	actor vocab.Actor
+	c     ActivityPubClient
+	st    readStore
 }
 
 var errEmptyIRI = errors.Newf("empty IRI")
@@ -143,4 +149,57 @@ func (k localRemoteLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey,
 
 	// NOTE(marius): if local verification fails, we try to fetch a fresh copy of the key and try again.
 	return k.loadRemoteKey(vocab.IRI(keyID))
+}
+
+func (k *localRemoteLoader) ResolveKey(_ context.Context, id string) (httpsig.Key, error) {
+	key := httpsig.Key{KeyID: id}
+	act, pub, err := k.loadKey(id)
+	if err != nil {
+		return key, err
+	}
+	k.actor = act
+	key.Algorithm, key.Key, err = rfcAlgorithmFromPublicKey(pub)
+	return key, err
+}
+
+func rfcAlgorithmFromPublicKey(pub *vocab.PublicKey) (httpsig.SignatureAlgorithm, crypto.PublicKey, error) {
+	pkey, err := toCryptoPublicKey(*pub)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var key crypto.PublicKey
+	var alg httpsig.SignatureAlgorithm
+	switch pk := pkey.(type) {
+	case *rsa.PublicKey:
+		switch pk.Size() {
+		case 128, 256:
+			alg = httpsig.RsaPkcs1v15Sha256
+		case 384:
+			alg = httpsig.RsaPkcs1v15Sha384
+		case 512:
+			alg = httpsig.RsaPkcs1v15Sha512
+		}
+		key = pk
+	case *ecdsa.PublicKey:
+		if p := pk.Params(); p != nil {
+			switch p.BitSize {
+			case 128, 256:
+				alg = httpsig.EcdsaP256Sha256
+			case 384:
+				alg = httpsig.EcdsaP384Sha384
+			case 512:
+				alg = httpsig.EcdsaP521Sha512
+			}
+		}
+		key = pk
+	case ed25519.PublicKey:
+		alg = httpsig.Ed25519
+		key = pk
+	}
+	return alg, key, nil
+}
+
+func (k *localRemoteLoader) Actor() vocab.Actor {
+	return k.actor
 }

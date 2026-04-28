@@ -9,18 +9,22 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"git.sr.ht/~mariusor/lw"
+	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
-	"github.com/go-fed/httpsig"
+	draft "github.com/go-fed/httpsig"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -43,7 +47,7 @@ func TestHTTPSignature(t *testing.T) {
 		{
 			name:    "with storage",
 			initFns: []InitFn{WithStorage(st())},
-			want:    httpSigVerifier{loader: localRemoteLoader{st: st()}, l: lw.Nil()},
+			want:    httpSigVerifier{loader: &localRemoteLoader{st: st()}, l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -82,30 +86,99 @@ func compareKeyLoader(x, y any) bool {
 var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))
 
 func Test_httpSigVerifier_Verify(t *testing.T) {
+	type fields struct {
+		loader keyLoader
+	}
 	tests := []struct {
-		name    string
-		a       httpSigVerifier
-		r       *http.Request
-		want    vocab.Actor
-		wantErr error
+		name        string
+		fields      fields
+		sigDuration time.Duration
+		req         *http.Request
+		want        vocab.Actor
+		wantErr     error
 	}{
 		{
 			name:    "nil request",
-			a:       httpSigVerifier{l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       nil,
+			req:     nil,
 			want:    AnonymousActor,
 			wantErr: errInvalidStorage,
 		},
 		{
 			name:    "no header",
-			a:       httpSigVerifier{loader: localRemoteLoader{st: st()}, l: lw.Dev(lw.SetOutput(t.Output()))},
-			r:       mockGetReq(),
+			fields:  fields{loader: &localRemoteLoader{st: st()}},
+			req:     mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
+		}, {
+			name: "GET no corresponding signature",
+			fields: fields{
+				loader: mockLoader{},
+			},
+			req: mockGetReq(url.Values{
+				"Signature-Input": []string{`empty=()`},
+			}),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(fmt.Errorf("%w: no signature present for label %s", httpsig.ErrMalformedData, "empty"), "verification failed"),
+		},
+		{
+			name:        "GET rfc9421 - B.2.1. example - wrong private key",
+			sigDuration: enoughForOldTests,
+			fields: fields{
+				loader: mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss")},
+			},
+			req: mockGetReq(url.Values{
+				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
+				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
+			}),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(errors.Newf("invalid signature: crypto/rsa: verification error"), "verification failed"),
+		},
+		{
+			name:        "GET rfc9421 - B.2.1. example, w/ client",
+			sigDuration: enoughForOldTests,
+			fields: fields{
+				loader: ldr(client.New(), nil),
+			},
+			req: mockGetReq(url.Values{
+				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
+				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
+			}),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(errors.Newf("unable to fetch key"), "verification failed"),
+		},
+		{
+			name:        "minimal signature using rsa-sha512 example - no content-digest",
+			sigDuration: enoughForOldTests,
+			fields: fields{
+				loader: ldr(client.New(), st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
+			},
+			req: rfcMockReq(url.Values{
+				"Signature-Input": []string{`sig-b22=("@authority" "content-digest" "@query-param";name="Pet");created=1618884473;keyid="http://example.com/~jdoe#main";tag="header-example"`},
+				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
+			}),
+			want:    AnonymousActor,
+			wantErr: errors.Annotatef(fmt.Errorf("%w: %s not present in message", httpsig.ErrCanonicalization, "content-digest"), "verification failed"),
+		},
+		{
+			name:        "minimal signature using rsa-sha512 example",
+			sigDuration: enoughForOldTests,
+			fields: fields{
+				loader: mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519")),
+			},
+			req: rfcMockReq(url.Values{
+				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
+				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},
+			}),
+			want: mockRFCActor(prvKeyEd25519, "test-key-ed25519"),
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, verifierTest(tt.a, tt.r, tt.want, tt.wantErr))
+		nonceStore = new(syncedNonceStore)
+		if tt.sigDuration > 0 {
+			sigMaxAgeDuration = tt.sigDuration
+		}
+		v := httpSigVerifier{loader: tt.fields.loader, l: lw.Dev(lw.SetOutput(t.Output()))}
+		t.Run(tt.name, verifierTest(v, tt.req, tt.want, tt.wantErr))
 	}
 }
 
@@ -339,7 +412,7 @@ func Test_compatibleDraftVerifyAlgorithms(t *testing.T) {
 	tests := []struct {
 		name   string
 		pubKey crypto.PublicKey
-		want   []httpsig.Algorithm
+		want   []draft.Algorithm
 	}{
 		{
 			name:   "empty",
@@ -348,22 +421,22 @@ func Test_compatibleDraftVerifyAlgorithms(t *testing.T) {
 		{
 			name:   "rsa x509",
 			pubKey: pubKeyRSA,
-			want:   []httpsig.Algorithm{httpsig.RSA_SHA256, httpsig.RSA_SHA512},
+			want:   []draft.Algorithm{draft.RSA_SHA256},
 		},
 		{
 			name:   "rsa pkcs#1",
 			pubKey: pubKeyRSA1,
-			want:   []httpsig.Algorithm{httpsig.RSA_SHA256, httpsig.RSA_SHA512},
+			want:   []draft.Algorithm{draft.RSA_SHA256},
 		},
 		{
 			name:   "ecdsa",
 			pubKey: pubKeyECDSA,
-			want:   []httpsig.Algorithm{httpsig.ECDSA_SHA512, httpsig.ECDSA_SHA256},
+			want:   []draft.Algorithm{draft.ECDSA_SHA256},
 		},
 		{
 			name:   "ed25519",
 			pubKey: pubKeyEd25519,
-			want:   []httpsig.Algorithm{httpsig.ED25519},
+			want:   []draft.Algorithm{draft.ED25519},
 		},
 	}
 	for _, tt := range tests {
@@ -567,6 +640,7 @@ func mockPostReq(body []byte, hh ...url.Values) *http.Request {
 			r.Header[k] = v
 		}
 	}
+	r.Header.Add("Content-Length", strconv.Itoa(len(body)))
 	return r
 }
 
@@ -591,43 +665,43 @@ func Test_httpSigVerifier_VerifyDraftSignature(t *testing.T) {
 	testActor.ID = "Test"
 	testActor.PublicKey.ID = "Test"
 	type fields struct {
-		loader localRemoteLoader
+		loader keyLoader
 	}
 	tests := []struct {
 		name    string
 		fields  fields
-		r       *http.Request
+		created time.Time
+		req     *http.Request
 		want    vocab.Actor
 		wantErr error
 	}{
 		{
 			name:    "empty",
 			fields:  fields{},
-			r:       nil,
+			req:     nil,
 			want:    AnonymousActor,
 			wantErr: errInvalidRequest,
 		},
 		{
-			name:    "no headers",
+			name:    "no loader",
 			fields:  fields{},
-			r:       mockGetReq(),
+			req:     mockGetReq(),
+			want:    AnonymousActor,
+			wantErr: errInvalidClient,
+		},
+		{
+			name:    "no headers",
+			fields:  fields{loader: mockLoader{}},
+			req:     mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.Annotatef(errors.Newf(`neither "Signature" nor "Authorization" have signature parameters`), "unable to initialize HTTP Signatures verifier"),
 		},
 		{
 			name:    "bad signature",
-			r:       mockGetReq(url.Values{"Signature": []string{"bad"}}),
+			fields:  fields{loader: mockLoader{}},
+			req:     mockGetReq(url.Values{"Signature": []string{"bad"}}),
 			want:    AnonymousActor,
 			wantErr: errors.NewBadRequest(errors.NotFoundf("neither \"Signature\" nor \"Authorization\" have signature parameters"), "unable to initialize HTTP Signatures verifier"),
-		},
-		{
-			name: "good signature, no client",
-			r: mockGetReq(url.Values{
-				"Signature": []string{`keyId="Test",algorithm="rsa-sha256",signature="SjWJWbWN7i0wzBvtPl8rbASWz5xQW6mcJmn+ibttBqtifLN7Sazz6m79cNfwwb8DMJ5cou1s7uEGKKCs+FLEEaDV5lp7q25WqS+lavg7T8hc0GppauB6hbgEKTwblDHYGEtbGmtdHgVCk9SuS13F0hZ8FD0k/5OxEPXe5WozsbM="`},
-				"Date":      []string{`Sun, 05 Jan 2014 21:31:40 GMT`},
-			}),
-			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errInvalidClient, "unable to load public key based on signature"),
 		},
 		{
 			name: "good signature",
@@ -636,8 +710,8 @@ func Test_httpSigVerifier_VerifyDraftSignature(t *testing.T) {
 					st: st(cavageActor, mockActorKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", cavagePrvKeyRSA), cavagePrvKeyRSA),
 				},
 			},
-			r: cavageMockReq(url.Values{
-				"Signature": []string{`keyId="http://example.com/~jdoe#main",algorithm="rsa-sha256",signature="SjWJWbWN7i0wzBvtPl8rbASWz5xQW6mcJmn+ibttBqtifLN7Sazz6m79cNfwwb8DMJ5cou1s7uEGKKCs+FLEEaDV5lp7q25WqS+lavg7T8hc0GppauB6hbgEKTwblDHYGEtbGmtdHgVCk9SuS13F0hZ8FD0k/5OxEPXe5WozsbM="`},
+			req: cavageMockReq(url.Values{
+				"Signature": []string{`keyId="http://example.com/~jdoe#main",algorithm="rsa-sha512",signature="SjWJWbWN7i0wzBvtPl8rbASWz5xQW6mcJmn+ibttBqtifLN7Sazz6m79cNfwwb8DMJ5cou1s7uEGKKCs+FLEEaDV5lp7q25WqS+lavg7T8hc0GppauB6hbgEKTwblDHYGEtbGmtdHgVCk9SuS13F0hZ8FD0k/5OxEPXe5WozsbM="`},
 				"Date":      []string{`Sun, 05 Jan 2014 21:31:40 GMT`},
 			}),
 			want: mockActor(),
@@ -649,7 +723,7 @@ func Test_httpSigVerifier_VerifyDraftSignature(t *testing.T) {
 				loader: tt.fields.loader,
 				l:      lw.Dev(lw.SetOutput(t.Output())),
 			}
-			got, err := k.VerifyDraftSignature(tt.r)
+			got, err := k.VerifyDraftSignature(tt.req)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
 				t.Fatalf("VerifyDraftSignature() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
 			}

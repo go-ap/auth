@@ -101,7 +101,7 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 		return ol.Verify(r)
 	case "Signature":
 		kl := httpSigVerifier{
-			loader: localRemoteLoader{c: a.c, st: a.st},
+			loader: &localRemoteLoader{c: a.c, st: a.st},
 			l:      a.l,
 		}
 		return kl.Verify(r)
