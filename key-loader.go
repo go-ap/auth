@@ -8,9 +8,11 @@ import (
 	"crypto/rsa"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
+	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 )
@@ -44,6 +46,8 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request")
 	}
+	acceptedMediaTypes := []string{client.ContentTypeActivityJson, client.ContentTypeJsonLD, "application/json;q=0.9"}
+	req.Header.Add("Accept", strings.Join(acceptedMediaTypes, ", "))
 
 	resp, err := k.c.Do(req)
 	if err != nil {
