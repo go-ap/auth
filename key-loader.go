@@ -76,9 +76,9 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	// NOTE(marius): if we were unable to decode a PublicKey, nor an Actor that matches the IRI, we have failed.
 	if !(key.ID.Equal(iri) || act.ID.Equal(iri)) {
 		if err != nil {
-			err = errors.Annotatef(err, "unable to decode key or actor")
+			err = errors.Annotatef(err, "unable to decode key or actor: %s", iri)
 		} else {
-			err = errors.Newf("unable to decode key or actor")
+			err = errors.Newf("unable to decode key or actor: %s", iri)
 		}
 		return AnonymousActor, nil, err
 	}
@@ -93,7 +93,7 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		// in the PublicKey struct. We should probably change that.
 		it, err := k.c.LoadIRI(key.Owner)
 		if err != nil {
-			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor")
+			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor: %s", iri)
 		}
 
 		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {

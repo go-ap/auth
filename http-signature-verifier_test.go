@@ -501,7 +501,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				return
 			},
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errors.Newf("unexpected end of JSON input"), "unable to decode key or actor"),
+			wantErr: errors.Annotatef(errors.Newf("unexpected end of JSON input"), "unable to decode key or actor: http://example.com/~jdoe/key"),
 		},
 		{
 			name: "good key, bad actor",
@@ -527,7 +527,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				p := mockActorKey("http://example.com/~jdoe/key", "http://example.com/~jdoe", prv)
 				return &p
 			}(),
-			wantErr: errors.Newf("unable to fetch actor"),
+			wantErr: errors.Newf("unable to fetch actor: http://example.com/~jdoe/key"),
 		},
 		{
 			name: "good key, good actor",
