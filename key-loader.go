@@ -63,7 +63,9 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	}
 
 	switch resp.StatusCode {
-	case http.StatusOK, http.StatusGone, http.StatusNotModified:
+	case http.StatusGone:
+		return AnonymousActor, nil, errors.Gonef("key does not exist")
+	case http.StatusOK, http.StatusNotModified:
 		// OK
 	default:
 		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key")

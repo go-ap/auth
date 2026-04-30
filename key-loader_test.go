@@ -132,6 +132,15 @@ func Test_keyLoader_loadRemoteKey(t *testing.T) {
 				_, _ = w.Write(payload)
 			}),
 		},
+		{
+			name: "deleted",
+			arg:  "http://example.com/~jdoe#main",
+			want: AnonymousActor,
+			handlerFn: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusGone)
+			}),
+			wantErr: errors.Gonef("key does not exist"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
