@@ -167,7 +167,7 @@ func mldr(it vocab.Actor) mockLoader {
 
 // NOTE(marius): we need to increase the max age for validation to something that allows
 // the date we're using in the tests we got from the RFC: Tue, 20 Apr 2021 02:07:55 GMT
-var enoughForOldTests = time.Now().Sub(time.UnixMicro(1618880000 * 1000 * 1000))
+var enoughForOldTests = time.Since(time.UnixMicro(1618880000 * 1000 * 1000))
 
 func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 	tests := []struct {
