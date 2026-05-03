@@ -44,14 +44,14 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 
 	req, err := http.NewRequest(http.MethodGet, string(iri), nil)
 	if err != nil {
-		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request")
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request: %s", iri)
 	}
 	acceptedMediaTypes := []string{client.ContentTypeActivityJson, client.ContentTypeJsonLD, "application/json;q=0.9"}
 	req.Header.Add("Accept", strings.Join(acceptedMediaTypes, ", "))
 
 	resp, err := k.c.Do(req)
 	if err != nil {
-		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key")
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key: %s", iri)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -64,11 +64,11 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 
 	switch resp.StatusCode {
 	case http.StatusGone:
-		return AnonymousActor, nil, errors.Gonef("key does not exist")
+		return AnonymousActor, nil, errors.Gonef("key does not exist: %s", iri)
 	case http.StatusOK, http.StatusNotModified:
 		// OK
 	default:
-		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key")
+		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key %s", iri)
 	}
 
 	key := new(vocab.PublicKey)
@@ -119,7 +119,7 @@ func (k localRemoteLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 	act := AnonymousActor
 	u, err := iri.URL()
 	if err != nil {
-		return act, nil, errors.Annotatef(err, "invalid URL to load")
+		return act, nil, errors.Annotatef(err, "invalid URL to load: %s", iri)
 	}
 	if u.Fragment != "" {
 		u.Fragment = ""
