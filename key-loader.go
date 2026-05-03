@@ -68,7 +68,16 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	case http.StatusOK, http.StatusNotModified:
 		// OK
 	default:
-		return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key %s", iri)
+		if errb, _ := errors.UnmarshalJSON(body); len(errb) > 0 {
+			err = errors.AnnotateFromStatus(errors.Join(errb...), resp.StatusCode, "unable to fetch key: %s", iri)
+		} else {
+			if len(body) > 0 {
+				err = errors.AnnotateFromStatus(errors.Newf("%s", body[:min(512, len(body))]), resp.StatusCode, "unable to fetch key: %s", iri)
+			} else {
+				err = errors.NewFromStatus(resp.StatusCode, "unable to fetch key: %s", iri)
+			}
+		}
+		return AnonymousActor, nil, err
 	}
 
 	key := new(vocab.PublicKey)

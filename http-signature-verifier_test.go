@@ -144,7 +144,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
 			}),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errors.Newf("unable to fetch key"), "verification failed"),
+			wantErr: errors.Annotatef(errors.Newf("unable to fetch key: test-key-rsa-pss"), "verification failed"),
 		},
 		{
 			name:        "minimal signature using rsa-sha512 example - no content-digest",
@@ -487,7 +487,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				w.WriteHeader(http.StatusNotFound)
 			},
 			want:    AnonymousActor,
-			wantErr: errors.Newf("unable to fetch key"),
+			wantErr: errors.Newf("unable to fetch key: http://example.com/~jdoe#main"),
 		},
 		{
 			name: "bad key json",
