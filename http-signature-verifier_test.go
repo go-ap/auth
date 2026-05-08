@@ -86,12 +86,9 @@ func compareKeyLoader(x, y any) bool {
 var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))
 
 func Test_httpSigVerifier_Verify(t *testing.T) {
-	type fields struct {
-		loader keyLoader
-	}
 	tests := []struct {
 		name        string
-		fields      fields
+		loader      keyLoader
 		sigDuration time.Duration
 		req         *http.Request
 		want        vocab.Actor
@@ -105,15 +102,13 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		},
 		{
 			name:    "no header",
-			fields:  fields{loader: &localRemoteLoader{st: st()}},
+			loader:  &localRemoteLoader{st: st()},
 			req:     mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
 		}, {
-			name: "GET no corresponding signature",
-			fields: fields{
-				loader: mockLoader{},
-			},
+			name:   "GET no corresponding signature",
+			loader: mockLoader{},
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`empty=()`},
 			}),
@@ -123,22 +118,18 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		{
 			name:        "GET rfc9421 - B.2.1. example - wrong private key",
 			sigDuration: enoughForOldTests,
-			fields: fields{
-				loader: mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss")},
-			},
+			loader:      mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss")},
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
 			}),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(errors.Newf("invalid signature: crypto/rsa: verification error"), "verification failed"),
+			wantErr: errors.Annotatef(errors.Annotatef(errors.Newf("invalid signature: crypto/rsa: verification error"), "verification failed"), "actor IRI http://example.com/~jdoe"),
 		},
 		{
 			name:        "GET rfc9421 - B.2.1. example, w/ client",
 			sigDuration: enoughForOldTests,
-			fields: fields{
-				loader: ldr(client.New(), nil),
-			},
+			loader:      ldr(client.New(), nil),
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
@@ -149,9 +140,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		{
 			name:        "minimal signature using rsa-sha512 example - no content-digest",
 			sigDuration: enoughForOldTests,
-			fields: fields{
-				loader: ldr(client.New(), st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
-			},
+			loader:      ldr(client.New(), st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b22=("@authority" "content-digest" "@query-param";name="Pet");created=1618884473;keyid="http://example.com/~jdoe#main";tag="header-example"`},
 				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
@@ -162,9 +151,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		{
 			name:        "minimal signature using rsa-sha512 example",
 			sigDuration: enoughForOldTests,
-			fields: fields{
-				loader: mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519")),
-			},
+			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519")),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
 				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},
@@ -177,7 +164,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		if tt.sigDuration > 0 {
 			sigMaxAgeDuration = tt.sigDuration
 		}
-		v := httpSigVerifier{loader: tt.fields.loader, l: lw.Dev(lw.SetOutput(t.Output()))}
+		v := httpSigVerifier{loader: tt.loader, l: lw.Dev(lw.SetOutput(t.Output()))}
 		t.Run(tt.name, verifierTest(v, tt.req, tt.want, tt.wantErr))
 	}
 }
