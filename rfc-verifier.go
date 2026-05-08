@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
@@ -15,14 +14,12 @@ type syncedNonceStore struct {
 	sync.Map
 }
 
-func (s *syncedNonceStore) Seen(n string) bool {
-	_, ok := s.Map.LoadOrStore(n, struct{}{})
-	return ok
-}
-
 var errInvalidNonce = errors.Newf("nonce already seen")
 
 func (s *syncedNonceStore) CheckNonce(_ context.Context, n string) error {
+	if n == "" {
+		return nil
+	}
 	_, ok := s.Map.LoadOrStore(n, struct{}{})
 	if ok {
 		return errInvalidNonce
@@ -31,11 +28,6 @@ func (s *syncedNonceStore) CheckNonce(_ context.Context, n string) error {
 }
 
 var nonceStore = new(syncedNonceStore)
-
-var (
-	sigValidDeltaDuration = time.Minute
-	sigMaxAgeDuration     = 30 * time.Second //10 * 365 * 24 * time.Hour
-)
 
 type actorKeyLoader interface {
 	httpsig.KeyResolver

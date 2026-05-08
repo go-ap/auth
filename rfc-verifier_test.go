@@ -9,9 +9,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
-	"sync"
 	"testing"
 	"time"
 
@@ -19,51 +20,10 @@ import (
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
+	"github.com/go-ap/client/s2s"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
 )
-
-func Test_syncedNonceStore_Seen(t *testing.T) {
-	tests := []struct {
-		name         string
-		argSequence  []string
-		wantSequence []bool
-	}{
-		{
-			name:         "empty",
-			argSequence:  []string{""},
-			wantSequence: []bool{false},
-		},
-		{
-			name:         "not seen",
-			argSequence:  []string{"1"},
-			wantSequence: []bool{false},
-		},
-		{
-			name:         "two not seen",
-			argSequence:  []string{"1", "2"},
-			wantSequence: []bool{false, false},
-		},
-		{
-			name:         "seen",
-			argSequence:  []string{"1", "1"},
-			wantSequence: []bool{false, true},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &syncedNonceStore{
-				Map: sync.Map{},
-			}
-			for i, arg := range tt.argSequence {
-				want := tt.wantSequence[i]
-				if got := s.Seen(arg); got != want {
-					t.Errorf("Seen() = %v, want %v", got, want)
-				}
-			}
-		})
-	}
-}
 
 // NOTE(marius): these values also come from the Test Cases appendix of RFC9421 HTTP-Signature doc
 // https://www.rfc-editor.org/rfc/rfc9421.html#name-test-cases
@@ -269,6 +229,50 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 			}
 			if !cmp.Equal(got, tt.want, EquateItems) {
 				t.Errorf("VerifyRFCSignature() got = %s", cmp.Diff(tt.want, got, EquateWeakErrors))
+			}
+		})
+	}
+}
+
+func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
+	nonceStore = new(syncedNonceStore)
+
+	emptyNonceFn := func() (string, error) { return "", nil }
+	sigMaxAgeDuration = enoughForOldTests
+	actor := mockRFCActor(prvKeyRSA1, "http://example.com/~jdoe#main")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		k := httpSigVerifier{loader: mldr(actor), l: lw.Dev(lw.SetOutput(t.Output()))}
+		if _, err := k.VerifyRFCSignature(r); err != nil {
+			t.Errorf("VerifyRFCSignature() unexpected error = %s", err)
+			return
+		}
+	})
+
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	buildReq := func() *http.Request {
+		req := mockPostReq([]byte(`{"hello": "world"}`))
+		req.URL, _ = url.Parse(srv.URL)
+		req.Host = req.URL.Host
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Host", req.Host)
+		return req
+	}
+
+	signer := s2s.New(s2s.WithActor(&actor, prvKeyRSA1), s2s.WithTransport(srv.Client().Transport), s2s.WithNonce(emptyNonceFn))
+
+	for i := range 2 {
+		t.Run(fmt.Sprintf("iter %d", i), func(t *testing.T) {
+			res, err := signer.RoundTrip(buildReq())
+			if err != nil {
+				t.Fatalf("VerifyRFCSignature() round trip unexpected error = %+v", err)
+			}
+			if res.StatusCode != http.StatusOK {
+				raw, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				t.Errorf("Error response received: %d: %s", res.StatusCode, raw)
 			}
 		})
 	}

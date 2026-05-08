@@ -576,6 +576,8 @@ func TestLoadRemoteKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.handlerFn != nil {
 				srv := httptest.NewServer(tt.handlerFn)
+				defer srv.Close()
+
 				tt.args.c = client.New(client.WithHTTPClient(srv.Client()))
 			}
 			act, pub, err := LoadRemoteKey(tt.args.ctx, tt.args.c, tt.args.iri)
