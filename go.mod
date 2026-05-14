@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
-	github.com/dadrus/httpsig v0.0.0-20260508102901-1bbd17383c65
+	github.com/dadrus/httpsig v0.0.0-20260515082019-58f3b48cc36a
 	github.com/go-ap/activitypub v0.0.0-20260416122353-fb80985e153a
-	github.com/go-ap/client v0.0.0-20260510174845-dfa31bb89f31
+	github.com/go-ap/client v0.0.0-20260515083614-2d3752ee8cb2
 	github.com/go-ap/errors v0.0.0-20260208110149-e1b309365966
 	github.com/go-ap/filters v0.0.0-20260416122840-724cb3c8974c
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
@@ -60,8 +60,6 @@ require (
 	gopkg.in/neurosnap/sentences.v1 v1.0.7 // indirect
 	quamina.net/go/quamina/v2 v2.0.2 // indirect
 )
-
-replace github.com/common-fate/httpsig v0.2.1 => github.com/mariusor/httpsig-rfc9421 v0.0.0-20260427153044-0a866089c7cf
 
 tool (
 	github.com/mattn/goveralls
