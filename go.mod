@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
-	github.com/dadrus/httpsig v0.0.0-20260515082019-58f3b48cc36a
+	github.com/dadrus/httpsig v0.9.0
 	github.com/go-ap/activitypub v0.0.0-20260416122353-fb80985e153a
-	github.com/go-ap/client v0.0.0-20260515083614-2d3752ee8cb2
+	github.com/go-ap/client v0.0.0-20260515125006-7c971011a6dd
 	github.com/go-ap/errors v0.0.0-20260208110149-e1b309365966
 	github.com/go-ap/filters v0.0.0-20260416122840-724cb3c8974c
 	github.com/go-ap/jsonld v0.0.0-20251216162253-e38fa664ea77
