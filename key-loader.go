@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
@@ -48,6 +49,10 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	}
 	acceptedMediaTypes := []string{client.ContentTypeActivityJson, client.ContentTypeJsonLD, "application/json;q=0.9"}
 	req.Header.Add("Accept", strings.Join(acceptedMediaTypes, ", "))
+
+	// NOTE(marius): adding the Date and Host headers to fulfill the minimal signing headers for production environments.
+	req.Header.Add("Date", time.Now().Round(time.Millisecond).UTC().Format(http.TimeFormat))
+	req.Header.Add("Host", req.URL.Hostname())
 
 	resp, err := k.c.Do(req)
 	if err != nil {
