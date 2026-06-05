@@ -8,8 +8,6 @@ import (
 	"crypto/rsa"
 	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
@@ -43,24 +41,16 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		return AnonymousActor, nil, errEmptyIRI
 	}
 
-	req, err := http.NewRequest(http.MethodGet, string(iri), nil)
+	req, err := client.FetchRequest(context.Background(), string(iri), http.MethodGet)
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request: %s", iri)
 	}
-	acceptedMediaTypes := []string{client.ContentTypeActivityJson, client.ContentTypeJsonLD, "application/json;q=0.9"}
-	req.Header.Add("Accept", strings.Join(acceptedMediaTypes, ", "))
-
-	// NOTE(marius): adding the Date and Host headers to fulfill the minimal signing headers for production environments.
-	req.Header.Add("Date", time.Now().Round(time.Millisecond).UTC().Format(http.TimeFormat))
-	req.Header.Add("Host", req.URL.Hostname())
 
 	resp, err := k.c.Do(req)
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key: %s", iri)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer resp.Body.Close()
 
 	var body []byte
 	if body, err = io.ReadAll(resp.Body); err != nil {
