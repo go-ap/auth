@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/google/go-cmp/cmp"
 
@@ -19,21 +18,15 @@ import (
 )
 
 func TestOAuth2_VerifyAccessCode(t *testing.T) {
-	type fields struct {
-		localURLs vocab.IRIs
-		cl        *client.C
-		st        oauthStore
-	}
 	tests := []struct {
 		name    string
-		fields  fields
+		st      oauthStore
 		code    string
 		want    vocab.Actor
 		wantErr error
 	}{
 		{
 			name:    "empty",
-			fields:  fields{},
 			code:    "",
 			want:    AnonymousActor,
 			wantErr: errInvalidStorage,
@@ -42,7 +35,7 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oauthVerifier{
-				st: tt.fields.st,
+				st: tt.st,
 				l:  lw.Dev(lw.SetOutput(t.Output())),
 			}
 
@@ -148,14 +141,12 @@ func areOAuthVerifier(a, b any) bool {
 func compareOAuthVerifier(x, y any) bool {
 	xe := x.(oauthVerifier)
 	ye := y.(oauthVerifier)
-	xst, _ := xe.st.(oauthStore)
-	yst, _ := ye.st.(oauthStore)
 	cx := config{
-		st: xst,
+		st: xe.st,
 		l:  xe.l,
 	}
 	cy := config{
-		st: yst,
+		st: ye.st,
 		l:  ye.l,
 	}
 	return compareConfig(cx, cy)

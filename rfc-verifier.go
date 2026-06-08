@@ -20,7 +20,7 @@ func (s *syncedNonceStore) CheckNonce(_ context.Context, n httpsig.NonceValue) e
 	if !n.Present {
 		return nil
 	}
-	_, ok := s.Map.LoadOrStore(n.Value, struct{}{})
+	_, ok := s.LoadOrStore(n.Value, struct{}{})
 	if ok {
 		return errInvalidNonce
 	}

@@ -485,7 +485,6 @@ func TestLoadRemoteKey(t *testing.T) {
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(``))
-				return
 			},
 			want:    AnonymousActor,
 			wantErr: errors.Annotatef(errors.Newf("unexpected end of JSON input"), "unable to decode key or actor: http://example.com/~jdoe/key"),

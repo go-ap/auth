@@ -83,16 +83,13 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 	logCtx := log.Ctx{}
 	logCtx["req"] = fmt.Sprintf("%s:%s", r.Method, r.URL.RequestURI())
 
-	var header string
 	var typ string
 	var auth string
 
 	if auth = r.Header.Get("Signature"); auth != "" {
 		typ = "Signature"
-		header = auth
 	} else if auth = r.Header.Get("Authorization"); auth != "" {
-		header = auth
-		typ, auth = getAuthorization(header)
+		typ, _ = getAuthorization(auth)
 	}
 
 	switch typ {

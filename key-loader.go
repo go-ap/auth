@@ -50,7 +50,9 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key: %s", iri)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var body []byte
 	if body, err = io.ReadAll(resp.Body); err != nil {
@@ -84,7 +86,7 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		err = jsonld.Unmarshal(body, &act)
 	}
 	// NOTE(marius): if we were unable to decode a PublicKey, nor an Actor that matches the IRI, we have failed.
-	if !(key.ID.Equal(iri) || act.ID.Equal(iri)) {
+	if !key.ID.Equal(iri) && !act.ID.Equal(iri) {
 		if err != nil {
 			err = errors.Annotatef(err, "unable to decode key or actor: %s", iri)
 		} else {
@@ -147,7 +149,7 @@ func (k localRemoteLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 		return nil
 	})
 
-	return act, key, nil
+	return act, key, err
 }
 
 func (k localRemoteLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
