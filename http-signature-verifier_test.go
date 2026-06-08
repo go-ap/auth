@@ -22,6 +22,7 @@ import (
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
+	"github.com/go-ap/client/s2s"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 	draft "github.com/go-fed/httpsig"
@@ -151,7 +152,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		{
 			name:        "minimal signature using rsa-sha512 example",
 			sigDuration: enoughForOldTests,
-			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519")),
+			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519"), s2s.KeyTypePKCS),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
 				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},

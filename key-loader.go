@@ -99,7 +99,7 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		key = &act.PublicKey
 	}
 	// NOTE(marius): we successfully loaded a PublicKey, we try to load the Actor from its Owner property
-	if key.ID.Equal(iri) {
+	if key.ID.Equal(iri) && !act.ID.Equal(key.Owner) {
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.

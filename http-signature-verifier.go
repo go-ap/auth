@@ -128,8 +128,7 @@ func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
 	if pubBytes == nil {
 		return nil, errors.Newf("unable to decode PEM payload for public key")
 	}
-	pk, _ := x509.ParsePKIXPublicKey(pubBytes.Bytes)
-	if pk != nil {
+	if pk, _ := x509.ParsePKIXPublicKey(pubBytes.Bytes); pk != nil {
 		return pk, nil
 	}
 	return x509.ParsePKCS1PublicKey(pubBytes.Bytes)
