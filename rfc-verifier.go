@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -14,15 +15,14 @@ type syncedNonceStore struct {
 	sync.Map
 }
 
-var errInvalidNonce = errors.Newf("nonce already seen")
+var errInvalidNonce = func(n string) error { return fmt.Errorf("nonce already seen: %s", n) }
 
 func (s *syncedNonceStore) CheckNonce(_ context.Context, n httpsig.NonceValue) error {
 	if !n.Present {
 		return nil
 	}
-	_, ok := s.LoadOrStore(n.Value, struct{}{})
-	if ok {
-		return errInvalidNonce
+	if _, exists := s.LoadOrStore(n.Value, struct{}{}); exists {
+		return errInvalidNonce(n.Value)
 	}
 	return nil
 }
