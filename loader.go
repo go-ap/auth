@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	log "git.sr.ht/~mariusor/lw"
+	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/filters"
 	"github.com/openshift/osin"
@@ -27,9 +28,10 @@ type ActivityPubClient interface {
 }
 
 type config struct {
-	c  ActivityPubClient
-	st oauthStore
-	l  log.Logger
+	c    ActivityPubClient
+	ncFn httpsig.NonceChecker
+	st   oauthStore
+	l    log.Logger
 }
 
 // actorResolver is a used for resolving actors either in local storage or remotely
@@ -60,6 +62,12 @@ func WithStorage(s oauthStore) InitFn {
 func WithClient(cl ActivityPubClient) InitFn {
 	return func(c *config) {
 		c.c = cl
+	}
+}
+
+func WithNonceChecker(nc httpsig.NonceChecker) InitFn {
+	return func(c *config) {
+		c.ncFn = nc
 	}
 }
 

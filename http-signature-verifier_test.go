@@ -160,7 +160,6 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		nonceStore = new(syncedNonceStore)
 		if tt.sigDuration > 0 {
 			sigMaxAgeDuration = tt.sigDuration
 		}

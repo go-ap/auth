@@ -393,7 +393,6 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			nonceStore = new(syncedNonceStore)
 			if tt.sigDuration > 0 {
 				sigMaxAgeDuration = tt.sigDuration
 			}
@@ -412,8 +411,6 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 }
 
 func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
-	nonceStore = new(syncedNonceStore)
-
 	emptyNonceFn := func() (string, error) { return "", nil }
 	sigMaxAgeDuration = enoughForOldTests
 	actor := mockRFCActor(prvKeyRSA1, "http://example.com/~jdoe#main")

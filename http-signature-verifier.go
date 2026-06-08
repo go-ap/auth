@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"git.sr.ht/~mariusor/lw"
+	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 	draft "github.com/go-fed/httpsig"
@@ -17,14 +18,16 @@ import (
 
 type httpSigVerifier struct {
 	loader keyLoader
+	ncFn   httpsig.NonceChecker
 	l      lw.Logger
 }
 
-// HTTPSignature returns a HTTP-Signature validator for loading f
+// HTTPSignature returns an HTTP-Signature validator for loading f
 func HTTPSignature(initFns ...InitFn) httpSigVerifier {
 	c := Config(initFns...)
 	v := httpSigVerifier{
 		loader: &localRemoteLoader{c: c.c, st: c.st},
+		ncFn:   c.ncFn,
 		l:      c.l,
 	}
 	return v

@@ -27,8 +27,6 @@ func (s *syncedNonceStore) CheckNonce(_ context.Context, n httpsig.NonceValue) e
 	return nil
 }
 
-var nonceStore = new(syncedNonceStore)
-
 type actorKeyLoader interface {
 	httpsig.KeyResolver
 	Actor() vocab.Actor
@@ -44,10 +42,13 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 	if !ok {
 		return AnonymousActor, errInvalidClient
 	}
+	if k.ncFn == nil {
+		k.ncFn = new(syncedNonceStore)
+	}
 	// Create a verifier
 	verifier, err := httpsig.NewVerifier(
 		resolver,
-		httpsig.WithNonceChecker(nonceStore),
+		httpsig.WithNonceChecker(k.ncFn),
 		httpsig.WithValidityTolerance(sigValidDeltaDuration),
 		httpsig.WithMaxAge(sigMaxAgeDuration),
 		httpsig.WithCreatedTimestampRequired(false),
