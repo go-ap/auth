@@ -59,7 +59,11 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 		return AnonymousActor, err
 	}
 
-	if err = verifier.Verify(httpsig.MessageFromRequest(req)); err != nil {
+	r2 := req.Clone(context.TODO())
+	if forwardedHost := r2.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		r2.Host = forwardedHost
+	}
+	if err = verifier.Verify(httpsig.MessageFromRequest(r2)); err != nil {
 		if act := resolver.Actor(); !vocab.IsNil(act) && act.ID != "" {
 			err = errors.Annotatef(err, "actor IRI %s", act.ID)
 		}
