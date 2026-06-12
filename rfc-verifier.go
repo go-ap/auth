@@ -8,6 +8,7 @@ import (
 
 	"git.sr.ht/~mariusor/lw"
 	"github.com/dadrus/httpsig"
+	"github.com/dunglas/httpsfv"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 )
@@ -33,6 +34,48 @@ type actorKeyLoader interface {
 	Actor() vocab.Actor
 }
 
+func signatureInputAlgorithm(header http.Header) (alg httpsig.SignatureAlgorithm) {
+	values := header.Values("Signature-Input")
+	inputDict, err := httpsfv.UnmarshalDictionary(values)
+	if err != nil {
+		return
+	}
+
+	for _, label := range inputDict.Names() {
+		m, _ := inputDict.Get(label)
+
+		sigParams, ok := m.(httpsfv.InnerList)
+		if !ok {
+			return alg
+		}
+		param, ok := sigParams.Params.Get("alg")
+		if !ok {
+			return alg
+		}
+		value, ok := param.(string)
+		if !ok {
+			return alg
+		}
+
+		alg = httpsig.SignatureAlgorithm(value)
+	}
+
+	return alg
+}
+
+type hardcodedAlgResolver struct {
+	actorKeyLoader
+	alg httpsig.SignatureAlgorithm
+}
+
+func (k hardcodedAlgResolver) ResolveKey(ctx context.Context, keyID string) (httpsig.Key, error) {
+	key, err := k.actorKeyLoader.ResolveKey(ctx, keyID)
+	if key.Algorithm == "" {
+		key.Algorithm = k.alg
+	}
+	return key, err
+}
+
 // VerifyRFCSignature checks for RFC9421 compatible HTTP signatures.
 // It is based on the common-fate/httpsig/verifier.Parse functionality adapted for go-ap.
 func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, error) {
@@ -45,6 +88,9 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 	}
 	if k.ncFn == nil {
 		k.ncFn = new(syncedNonceStore)
+	}
+	if alg := signatureInputAlgorithm(req.Header); alg != "" {
+		resolver = hardcodedAlgResolver{alg: alg, actorKeyLoader: resolver}
 	}
 	// Create a verifier
 	verifier, err := httpsig.NewVerifier(

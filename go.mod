@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
 	github.com/dadrus/httpsig v0.9.0
+	github.com/dunglas/httpsfv v1.1.0
 	github.com/go-ap/activitypub v0.0.0-20260607141243-4f8aa4005e65
 	github.com/go-ap/client v0.0.0-20260612113524-640e9e9bf754
 	github.com/go-ap/errors v0.0.0-20260607141156-afed270859b6
@@ -30,7 +31,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/go-chi/chi/v5 v5.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jdkato/prose v1.2.1 // indirect
