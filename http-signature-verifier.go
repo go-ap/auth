@@ -43,6 +43,9 @@ func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, err
 		return AnonymousActor, errInvalidClient
 	}
 
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		r.Host = forwardedHost
+	}
 	v, err := draft.NewVerifier(r)
 	if err != nil {
 		return AnonymousActor, errors.NewBadRequest(err, "unable to initialize HTTP Signatures verifier")
