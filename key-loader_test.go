@@ -141,7 +141,7 @@ func Test_keyLoader_loadRemoteKey(t *testing.T) {
 			handlerFn: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusGone)
 			}),
-			wantErr: errors.Gonef("key does not exist"),
+			wantErr: errors.Gonef("key does not exist: http://example.com/~jdoe#main"),
 		},
 		{
 			name: "tags.pub actor issue #473",

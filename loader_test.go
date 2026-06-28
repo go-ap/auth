@@ -205,7 +205,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 			},
 			r:       mockGetReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
 			want:    AnonymousActor,
-			wantErr: errors.NotFoundf("not found"),
+			wantErr: errors.Annotatef(errors.NotFoundf("not found"), "Unauthorized"),
 		},
 		{
 			name: "good bearer",

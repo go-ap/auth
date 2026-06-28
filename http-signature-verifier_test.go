@@ -106,7 +106,7 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 			loader:  &localRemoteLoader{st: st()},
 			req:     mockGetReq(),
 			want:    AnonymousActor,
-			wantErr: errors.BadRequestf("unable to initialize HTTP Signatures verifier"),
+			wantErr: errors.Annotatef(errors.BadRequestf(`neither "Signature" nor "Authorization" have signature parameters`), "unable to initialize HTTP Signatures verifier"),
 		}, {
 			name:   "GET no corresponding signature",
 			loader: mockLoader{},
