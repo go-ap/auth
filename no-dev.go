@@ -6,5 +6,5 @@ import "time"
 
 var (
 	sigValidDeltaDuration = time.Minute
-	sigMaxAgeDuration     = 30 * time.Second
+	sigMaxAgeDuration     = 5 * time.Minute
 )

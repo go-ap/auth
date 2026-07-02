@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -238,8 +239,9 @@ var (
 		},
 	}
 
-	mitraSilverPill = func() vocab.Actor {
-		it, err := vocab.UnmarshalJSON([]byte(`{"@context":["https://www.w3.org/ns/activitystreams","https://www.w3.org/ns/cid/v1","https://w3id.org/security/v1","https://w3id.org/security/data-integrity/v2",{"manuallyApprovesFollowers":"as:manuallyApprovesFollowers","schema":"http://schema.org/","PropertyValue":"schema:PropertyValue","value":"schema:value","toot":"http://joinmastodon.org/ns#","discoverable":"toot:discoverable","featured":"toot:featured","Emoji":"toot:Emoji","mitra":"http://jsonld.mitra.social#","subscribers":"mitra:subscribers","VerifiableIdentityStatement":"mitra:VerifiableIdentityStatement","MitraJcsEip191Signature2022":"mitra:MitraJcsEip191Signature2022","gateways":"mitra:gateways","implements":"mitra:implements","proofValue":"sec:proofValue","proofPurpose":"sec:proofPurpose"}],"id":"https://mitra.social/users/silverpill","type":"Person","preferredUsername":"silverpill","name":"silverpill","inbox":"https://mitra.social/users/silverpill/inbox","outbox":"https://mitra.social/users/silverpill/outbox","followers":"https://mitra.social/users/silverpill/followers","following":"https://mitra.social/users/silverpill/following","subscribers":"https://mitra.social/users/silverpill/subscribers","featured":"https://mitra.social/users/silverpill/collections/featured","assertionMethod":[{"id":"https://mitra.social/users/silverpill#main-key","type":"Multikey","controller":"https://mitra.social/users/silverpill","publicKeyMultibase":"z4MXj1wBzi9jUstyPkUpxMpTJw8gwWSku9DQGbjZDXXjBf1HpRQGkxugs1aRS6Zx5TvKNj1GrssZSf2Mi855Xq3b5YYSySXNcaiUFC4W6FJbseASFFJpVGpab5toa9q51A37T5zQiDaVZcgi3bsAd27ZpQGkzJn78gh2jJt3ucrYPQ4Mg7ufWkUdPAsko9MTk7hdRUteythAEZFFHb5LmsQJ5dR2a8yfsNH98LvN9iVpmF7cy53SX61gCB8kvk5AdQdzm3BgDWUsjus5BKCwLhPveiRq1cvQmisTrz4Zzc5iHWdp2vtf9qiEcKAqfGhNSsf4ZHP9rdT4p2gV8XM7RbsaTKoo3rmjn9u4QTs3ubdZRr5CMyqkc"},{"id":"https://mitra.social/users/silverpill#ed25519-key","type":"Multikey","controller":"https://mitra.social/users/silverpill","publicKeyMultibase":"z6MkjtdL1hhAtJDRTti4JZtjGVkMiqbrQWhLQjK8wV4neCvS"}],"publicKey":{"id":"https://mitra.social/users/silverpill#main-key","owner":"https://mitra.social/users/silverpill","publicKeyPem":"-----BEGIN RSA PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwvnkkLAnX7SThHEC9tOX\ny6Y4N5DjFH4hs1q3VuRJH6NIZbIX3g7EX2yta3WXpJFrvRvfx/39+aYfxGBEP6qr\n0hoa7rYDVWMs/tgsd98Zc4K6dEAlTljvATlGEuW6MDaF9qBM9SIFs0ZFXH90wStD\nhW9PBFcmLpqQ8ZTa+busK0hP/k5PxrmQz18DQpRzdHK0cFK81STAmK/Rrx1uWQRs\nWJvKZHWmhAVZcdDIRLciERx+W4XYFXpl57LkyP6QGpeD+6dGMzt8KR2O9kNBSuAh\njXPQMvzlsK7jLP97+780vyQvTYOCapBzCTOjuPANH0OA7XVR2iv/tVDKSeqC/+p7\ndwIDAQAB\n-----END RSA PUBLIC KEY-----\n"},"generator":{"type":"Application","implements":[{"name":"RFC-9421: HTTP Message Signatures","href":"https://datatracker.ietf.org/doc/html/rfc9421"},{"name":"RFC-9421 signatures using the Ed25519 algorithm","href":"https://datatracker.ietf.org/doc/html/rfc9421#name-eddsa-using-curve-edwards25"}]},"icon":{"type":"Image","url":"https://mitra.social/media/6a785bf7dd05f61c3590e8935aa49156a499ac30fd1e402f79e7e164adb36e2c.png","mediaType":"image/png"},"summary":"<p>Developer of ActivityPub-based micro-blogging and content subscription platform <a href=\"https://codeberg.org/silverpill/mitra\" rel=\"noopener\">Mitra</a>. I help maintain the <a href=\"https://codeberg.org/fediverse/fep\" rel=\"noopener\">FEP repository</a> and write my own <a href=\"https://codeberg.org/silverpill/feps\" rel=\"noopener\">FEPs</a> too. Currently working on <a href=\"https://codeberg.org/ap-next/ap-next\" rel=\"noopener\">ActivityPub Next</a>.</p>","attachment":[{"alsoKnownAs":"https://mitra.social/users/silverpill","proof":{"created":"2024-09-27T15:20:32.266850026Z","proofPurpose":"assertionMethod","proofValue":"zK43vnqGDEMNqEtKe7QJWnVeqhmsRY9NAQKL9XxT7nhjBbTNz1FFB1nLxAaazjMDRirFiQovzYRkaSje5rhzv4XF4w","type":"MitraJcsEip191Signature2022","verificationMethod":"did:pkh:eip155:1:0x198ad1c900a575068879d5b0aabacbfefac522fa"},"subject":"did:pkh:eip155:1:0x198ad1c900a575068879d5b0aabacbfefac522fa","type":"VerifiableIdentityStatement"},{"alsoKnownAs":"https://mitra.social/users/silverpill","proof":{"created":"2026-03-31T17:26:57.650227665Z","cryptosuite":"eddsa-jcs-2022","proofPurpose":"assertionMethod","proofValue":"z5Croj8RckNeLHQjYSEZE9kb2VzGzBaCHwnqqhv79cd37ZPGirrtyGrJkh4tKWxyL7vgnhuJSGhhQxZYnu9wMBJzc","type":"DataIntegrityProof","verificationMethod":"did:key:z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT#z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT"},"subject":"did:key:z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT","type":"VerifiableIdentityStatement"},{"href":"https://mitra.social/users/silverpill/proposals/monero:418015bb9ae982a1975da7d79277c270","mediaType":"application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"","name":"MoneroSubscription","rel":["payment","https://w3id.org/valueflows/ont/vf#Proposal"],"type":"Link"},{"name":"Code","type":"PropertyValue","value":"<a href=\"https://codeberg.org/silverpill/\" rel=\"noopener\">https://codeberg.org/silverpill/</a>"},{"name":"Matrix","type":"PropertyValue","value":"@silverpill:unredacted.org"},{"name":"XMPP","type":"PropertyValue","value":"<a href=\"xmpp:silverpill@were.chat\" rel=\"noopener\">silverpill@were.chat</a>"},{"name":"$XMR","type":"PropertyValue","value":"48YM8jwJqDkeUvD38vepSXFeMZH1zsjbvGwTTuaNSSq6Q5GyeWaeiheAZUsSmNn72YdyLpw8geb4FL3opZfGbguJLUj8Mi9"},{"name":"XMR subscription","type":"PropertyValue","value":"<a href=\"https://mitra.social/@silverpill/subscription\" rel=\"noopener\">https://mitra.social/@silverpill/subscription</a>"},{"name":"PGP","type":"PropertyValue","value":"0541 49E3 0F91 C6D7 8FFA  C49C 955F 5A6E 2123 25F0"},{"name":"OMEMO fingerprint","type":"PropertyValue","value":"689a2fb0ec87a9481fb45cb7d8870da6aeb4d8247bd69a39017701133b901f04"},{"name":"Matrix (backup)","type":"PropertyValue","value":"@silverpill:poa.st"}],"manuallyApprovesFollowers":false,"discoverable":true,"url":"https://mitra.social/users/silverpill","published":"2021-11-06T21:08:57.441927Z","updated":"2026-03-31T17:28:19.959176Z"}`))
+	mitraActorDoc = `{"@context":["https://www.w3.org/ns/activitystreams","https://www.w3.org/ns/cid/v1","https://w3id.org/security/v1","https://w3id.org/security/data-integrity/v2",{"manuallyApprovesFollowers":"as:manuallyApprovesFollowers","schema":"http://schema.org/","PropertyValue":"schema:PropertyValue","value":"schema:value","toot":"http://joinmastodon.org/ns#","discoverable":"toot:discoverable","featured":"toot:featured","Emoji":"toot:Emoji","mitra":"http://jsonld.mitra.social#","subscribers":"mitra:subscribers","VerifiableIdentityStatement":"mitra:VerifiableIdentityStatement","MitraJcsEip191Signature2022":"mitra:MitraJcsEip191Signature2022","gateways":"mitra:gateways","implements":"mitra:implements","proofValue":"sec:proofValue","proofPurpose":"sec:proofPurpose"}],"id":"https://mitra.social/users/silverpill","type":"Person","preferredUsername":"silverpill","name":"silverpill","inbox":"https://mitra.social/users/silverpill/inbox","outbox":"https://mitra.social/users/silverpill/outbox","followers":"https://mitra.social/users/silverpill/followers","following":"https://mitra.social/users/silverpill/following","subscribers":"https://mitra.social/users/silverpill/subscribers","featured":"https://mitra.social/users/silverpill/collections/featured","assertionMethod":[{"id":"https://mitra.social/users/silverpill#main-key","type":"Multikey","controller":"https://mitra.social/users/silverpill","publicKeyMultibase":"z4MXj1wBzi9jUstyPkUpxMpTJw8gwWSku9DQGbjZDXXjBf1HpRQGkxugs1aRS6Zx5TvKNj1GrssZSf2Mi855Xq3b5YYSySXNcaiUFC4W6FJbseASFFJpVGpab5toa9q51A37T5zQiDaVZcgi3bsAd27ZpQGkzJn78gh2jJt3ucrYPQ4Mg7ufWkUdPAsko9MTk7hdRUteythAEZFFHb5LmsQJ5dR2a8yfsNH98LvN9iVpmF7cy53SX61gCB8kvk5AdQdzm3BgDWUsjus5BKCwLhPveiRq1cvQmisTrz4Zzc5iHWdp2vtf9qiEcKAqfGhNSsf4ZHP9rdT4p2gV8XM7RbsaTKoo3rmjn9u4QTs3ubdZRr5CMyqkc"},{"id":"https://mitra.social/users/silverpill#ed25519-key","type":"Multikey","controller":"https://mitra.social/users/silverpill","publicKeyMultibase":"z6MkjtdL1hhAtJDRTti4JZtjGVkMiqbrQWhLQjK8wV4neCvS"}],"publicKey":{"id":"https://mitra.social/users/silverpill#main-key","owner":"https://mitra.social/users/silverpill","publicKeyPem":"-----BEGIN RSA PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwvnkkLAnX7SThHEC9tOX\ny6Y4N5DjFH4hs1q3VuRJH6NIZbIX3g7EX2yta3WXpJFrvRvfx/39+aYfxGBEP6qr\n0hoa7rYDVWMs/tgsd98Zc4K6dEAlTljvATlGEuW6MDaF9qBM9SIFs0ZFXH90wStD\nhW9PBFcmLpqQ8ZTa+busK0hP/k5PxrmQz18DQpRzdHK0cFK81STAmK/Rrx1uWQRs\nWJvKZHWmhAVZcdDIRLciERx+W4XYFXpl57LkyP6QGpeD+6dGMzt8KR2O9kNBSuAh\njXPQMvzlsK7jLP97+780vyQvTYOCapBzCTOjuPANH0OA7XVR2iv/tVDKSeqC/+p7\ndwIDAQAB\n-----END RSA PUBLIC KEY-----\n"},"generator":{"type":"Application","implements":[{"name":"RFC-9421: HTTP Message Signatures","href":"https://datatracker.ietf.org/doc/html/rfc9421"},{"name":"RFC-9421 signatures using the Ed25519 algorithm","href":"https://datatracker.ietf.org/doc/html/rfc9421#name-eddsa-using-curve-edwards25"}]},"icon":{"type":"Image","url":"https://mitra.social/media/6a785bf7dd05f61c3590e8935aa49156a499ac30fd1e402f79e7e164adb36e2c.png","mediaType":"image/png"},"summary":"<p>Developer of ActivityPub-based micro-blogging and content subscription platform <a href=\"https://codeberg.org/silverpill/mitra\" rel=\"noopener\">Mitra</a>. I help maintain the <a href=\"https://codeberg.org/fediverse/fep\" rel=\"noopener\">FEP repository</a> and write my own <a href=\"https://codeberg.org/silverpill/feps\" rel=\"noopener\">FEPs</a> too. Currently working on <a href=\"https://codeberg.org/ap-next/ap-next\" rel=\"noopener\">ActivityPub Next</a>.</p>","attachment":[{"alsoKnownAs":"https://mitra.social/users/silverpill","proof":{"created":"2024-09-27T15:20:32.266850026Z","proofPurpose":"assertionMethod","proofValue":"zK43vnqGDEMNqEtKe7QJWnVeqhmsRY9NAQKL9XxT7nhjBbTNz1FFB1nLxAaazjMDRirFiQovzYRkaSje5rhzv4XF4w","type":"MitraJcsEip191Signature2022","verificationMethod":"did:pkh:eip155:1:0x198ad1c900a575068879d5b0aabacbfefac522fa"},"subject":"did:pkh:eip155:1:0x198ad1c900a575068879d5b0aabacbfefac522fa","type":"VerifiableIdentityStatement"},{"alsoKnownAs":"https://mitra.social/users/silverpill","proof":{"created":"2026-03-31T17:26:57.650227665Z","cryptosuite":"eddsa-jcs-2022","proofPurpose":"assertionMethod","proofValue":"z5Croj8RckNeLHQjYSEZE9kb2VzGzBaCHwnqqhv79cd37ZPGirrtyGrJkh4tKWxyL7vgnhuJSGhhQxZYnu9wMBJzc","type":"DataIntegrityProof","verificationMethod":"did:key:z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT#z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT"},"subject":"did:key:z6MkrJ9F3pUkBV28cAQ1LNhUmMHakZsx3GLg2eYgyHDv9tnT","type":"VerifiableIdentityStatement"},{"href":"https://mitra.social/users/silverpill/proposals/monero:418015bb9ae982a1975da7d79277c270","mediaType":"application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"","name":"MoneroSubscription","rel":["payment","https://w3id.org/valueflows/ont/vf#Proposal"],"type":"Link"},{"name":"Code","type":"PropertyValue","value":"<a href=\"https://codeberg.org/silverpill/\" rel=\"noopener\">https://codeberg.org/silverpill/</a>"},{"name":"Matrix","type":"PropertyValue","value":"@silverpill:unredacted.org"},{"name":"XMPP","type":"PropertyValue","value":"<a href=\"xmpp:silverpill@were.chat\" rel=\"noopener\">silverpill@were.chat</a>"},{"name":"$XMR","type":"PropertyValue","value":"48YM8jwJqDkeUvD38vepSXFeMZH1zsjbvGwTTuaNSSq6Q5GyeWaeiheAZUsSmNn72YdyLpw8geb4FL3opZfGbguJLUj8Mi9"},{"name":"XMR subscription","type":"PropertyValue","value":"<a href=\"https://mitra.social/@silverpill/subscription\" rel=\"noopener\">https://mitra.social/@silverpill/subscription</a>"},{"name":"PGP","type":"PropertyValue","value":"0541 49E3 0F91 C6D7 8FFA  C49C 955F 5A6E 2123 25F0"},{"name":"OMEMO fingerprint","type":"PropertyValue","value":"689a2fb0ec87a9481fb45cb7d8870da6aeb4d8247bd69a39017701133b901f04"},{"name":"Matrix (backup)","type":"PropertyValue","value":"@silverpill:poa.st"}],"manuallyApprovesFollowers":false,"discoverable":true,"url":"https://mitra.social/users/silverpill","published":"2021-11-06T21:08:57.441927Z","updated":"2026-03-31T17:28:19.959176Z"}`
+	mitraActorFn  = func() vocab.Actor {
+		it, err := vocab.UnmarshalJSON([]byte(mitraActorDoc))
 		if err != nil {
 			panic(err)
 		}
@@ -248,6 +250,27 @@ var (
 			panic(err)
 		}
 		return *a
+	}()
+
+	tagsPubKeyDoc = `{
+  "@context": [
+    "https://w3id.org/security/v1",
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "id": "https://tags.pub/user/activitypub/publickey",
+  "type": "CryptographicKey",
+  "owner": "https://tags.pub/user/activitypub",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4U5c7F2cpNTKoOz4Pp+g\nThvIMxux3mVtnT58uZv94kzzdL8s+b6ldpuxIN7x+7RmfovWyeKsaot2nM8NWaTZ\nbAVJyCdL1IJ+tTBmeTvtPCKXUuP3xG9qJSFqUPyxEymdVrpdG1uOON6s7p8BVz94\nrMCoKIzUO90pcAV9GTayh2ilTEGHyZW8WEwIZOv9JruPDMBfCiq8LTIDTHGkTXzg\nrU3xfmUjYEt2+McKlEJsh5NL6cZyoPRdI1Ci0whO6UNSNolJxRfuw7Y5EIt6xpqI\nWHkRWAOovE9f4yNAvVNG1SP+6nwjK9tTvAP670QP4RsSS5x/wxcN6mQE1yWjkX9e\ncwIDAQAB\n-----END PUBLIC KEY-----\n",
+  "to": "as:Public"
+}`
+
+	emptyActorWithTagsPubKeyFn = func() vocab.Actor {
+		key := vocab.PublicKey{}
+		err := json.Unmarshal([]byte(tagsPubKeyDoc), &key)
+		if err != nil {
+			panic(err)
+		}
+		return vocab.Actor{PublicKey: key}
 	}()
 )
 
@@ -372,7 +395,7 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		},
 		{
 			name:   "mitra prod example",
-			loader: mldr(mitraSilverPill, s2s.KeyTypePKCS),
+			loader: mldr(mitraActorFn, s2s.KeyTypePKCS),
 			req: func() *http.Request {
 				//POST /inbox HTTP/1.1
 				//Host: marius.federated.id
@@ -402,7 +425,41 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 				return req
 			}(),
 			sigDuration: 0,
-			want:        mitraSilverPill,
+			want:        mitraActorFn,
+			wantErr:     nil,
+		},
+		{
+			name:   "tags.pub prod example",
+			loader: mldr(emptyActorWithTagsPubKeyFn, s2s.KeyTypePKCS),
+			req: func() *http.Request {
+				//POST /inbox HTTP/1.1
+				//Host: beta.littr.me
+				//Accept-Encoding: gzip, br
+				//Content-Digest: sha-256=:oQCMcUPL71s97RG1fMMf6qZYPR0E4k6zfwV19iK/Jyc=:
+				//Content-Length: 611
+				//Content-Type: application/activity+json
+				//Date: Fri, 01 May 2026 11:28:22 GMT
+				//User-Agent: activitypub.bot/0.45.9 (https://github.com/evanp/activitypub-bot)
+				//Signature: sig1=:V2eX+FcO/cePSjdkuUPpgYVpwOmvsbo7S9VWBXnMI698mbIlyScK+BkfVCtndlHcMu5H05agdw69GJOiLEx2iLE7IYouL8hcIiYZFt87vAkt++ohJtAwzLgk7GRX8Ur3pkdEqVtQKZYVyHrfeaQdZEdL8wVeUmBbKXvF1Q6CHaSGvgzkdfoNa8FLleebBMqG9DpJH4ThDx56pOB0vUg6RUdkZuh2XyXWuoLRM+1eLEoBUO3KxBrRcgAxKcXNwsBc5ToEvooGgBwino0Q55QtoTFCJLIUX3MBSvBPe9jRkk8B04a1VIBOu3mgU8hOd0kvZDJvehWxQZxpTGkZ2MBN5w==:
+				//Signature-Input: sig1=("@method" "@target-uri" "date" "user-agent" "content-type" "content-digest");keyid="https://tags.pub/user/activitypub/publickey";alg="rsa-v1_5-sha256";created=1777634902
+				//
+				//{"@context":"https://www.w3.org/ns/activitystreams","id":"https://tags.pub/user/activitypub/announce/cq40liucTUC30vHxTzZz0","type":"Announce","actor":"https://tags.pub/user/activitypub","cc":"https://socialwebfoundation.org/author/evanprodromou/","object":"https://socialwebfoundation.org/?p=144261","published":"2026-05-01T07:52:18.376Z","summary":"activitypub shared \"Social Web Foundation at Wikimedia Hackathon\"","summaryMap":{"en":"activitypub shared \"Social Web Foundation at Wikimedia Hackathon\""},"to":["https://tags.pub/user/activitypub/followers","as:Public"],"updated":"2026-05-01T07:52:18.376Z"}
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://beta.littr.me/inbox",
+					strings.NewReader(`{"@context":"https://www.w3.org/ns/activitystreams","id":"https://tags.pub/user/activitypub/announce/cq40liucTUC30vHxTzZz0","type":"Announce","actor":"https://tags.pub/user/activitypub","cc":"https://socialwebfoundation.org/author/evanprodromou/","object":"https://socialwebfoundation.org/?p=144261","published":"2026-05-01T07:52:18.376Z","summary":"activitypub shared \"Social Web Foundation at Wikimedia Hackathon\"","summaryMap":{"en":"activitypub shared \"Social Web Foundation at Wikimedia Hackathon\""},"to":["https://tags.pub/user/activitypub/followers","as:Public"],"updated":"2026-05-01T07:52:18.376Z"}`),
+				)
+				req.Header.Add("Content-Digest", "sha-256=:oQCMcUPL71s97RG1fMMf6qZYPR0E4k6zfwV19iK/Jyc=:")
+				req.Header.Add("Content-Length", "611")
+				req.Header.Add("Date", "Fri, 01 May 2026 11:28:22 GMT")
+				req.Header.Add("Content-Type", "application/activity+json")
+				req.Header.Add("User-Agent", "activitypub.bot/0.45.9 (https://github.com/evanp/activitypub-bot)")
+				req.Header.Add("Signature-Input", `sig1=("@method" "@target-uri" "date" "user-agent" "content-type" "content-digest");keyid="https://tags.pub/user/activitypub/publickey";alg="rsa-v1_5-sha256";created=1777634902`)
+				req.Header.Add("Signature", "sig1=:V2eX+FcO/cePSjdkuUPpgYVpwOmvsbo7S9VWBXnMI698mbIlyScK+BkfVCtndlHcMu5H05agdw69GJOiLEx2iLE7IYouL8hcIiYZFt87vAkt++ohJtAwzLgk7GRX8Ur3pkdEqVtQKZYVyHrfeaQdZEdL8wVeUmBbKXvF1Q6CHaSGvgzkdfoNa8FLleebBMqG9DpJH4ThDx56pOB0vUg6RUdkZuh2XyXWuoLRM+1eLEoBUO3KxBrRcgAxKcXNwsBc5ToEvooGgBwino0Q55QtoTFCJLIUX3MBSvBPe9jRkk8B04a1VIBOu3mgU8hOd0kvZDJvehWxQZxpTGkZ2MBN5w==:")
+				return req
+			}(),
+			sigDuration: 0,
+			want:        emptyActorWithTagsPubKeyFn,
 			wantErr:     nil,
 		},
 	}
