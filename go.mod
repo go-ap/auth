@@ -7,7 +7,7 @@ require (
 	github.com/dadrus/httpsig v0.9.0
 	github.com/dunglas/httpsfv v1.1.0
 	github.com/go-ap/activitypub v0.0.0-20260701132640-13f25467c431
-	github.com/go-ap/client v0.0.0-20260702141114-0578ecc0f151
+	github.com/go-ap/client v0.0.0-20260703082024-278a0a8701ae
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
 	github.com/go-ap/filters v0.0.0-20260701132827-4ad866f2a41d
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
