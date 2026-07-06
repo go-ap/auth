@@ -629,6 +629,7 @@ func mockPostReq(body []byte, hh ...url.Values) *http.Request {
 		}
 	}
 	r.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	r.RequestURI = ""
 	return r
 }
 
