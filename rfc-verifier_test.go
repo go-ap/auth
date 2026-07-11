@@ -508,10 +508,7 @@ func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
 		return req
 	}
 
-	signer, err := s2s.New(s2s.WithActor(&actor, prvKeyRSA1), s2s.WithNonce(emptyNonceFn), s2s.WithAlg(s2s.KeyTypePSS))
-	if err != nil {
-		t.Fatalf("Signer error: %v", err)
-	}
+	signer := s2s.New(s2s.WithActor(&actor, prvKeyRSA1), s2s.WithNonce(emptyNonceFn), s2s.WithAlg(s2s.KeyTypePSS))
 
 	cl := client.New(
 		client.WithHTTPClient(srv.Client()),
