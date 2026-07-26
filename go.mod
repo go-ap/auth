@@ -6,10 +6,10 @@ require (
 	git.sr.ht/~mariusor/lw v0.0.0-20250325163623-1639f3fb0e0d
 	github.com/dadrus/httpsig v0.9.0
 	github.com/dunglas/httpsfv v1.1.0
-	github.com/go-ap/activitypub v0.0.0-20260720130625-e2c76676dde7
-	github.com/go-ap/client v0.0.0-20260723115020-5b594d277d26
+	github.com/go-ap/activitypub v0.0.0-20260726121542-1f5299646d89
+	github.com/go-ap/client v0.0.0-20260726122738-10df2dce1ad6
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
-	github.com/go-ap/filters v0.0.0-20260720130825-55f4e622346f
+	github.com/go-ap/filters v0.0.0-20260726122206-0a4b91e3b913
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
 	github.com/go-fed/httpsig v1.1.0
 	github.com/google/go-cmp v0.7.0
@@ -37,7 +37,7 @@ require (
 	github.com/leporo/sqlf v1.4.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
-	github.com/mattn/go-isatty v0.0.23 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/mattn/goveralls v0.0.12 // indirect
 	github.com/mfridman/tparse v0.18.0 // indirect

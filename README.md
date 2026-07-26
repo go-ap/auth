@@ -11,7 +11,8 @@ It is a wrapper package around making compatible libraries as [HTTP-Sig](https:/
 
 It provides functions to append Authorization headers to requests made with the client module, and also middlewares for verifying incoming requests against remote actors.
 
-You can find an expanded documentation about the whole library [on SourceHut](https://man.sr.ht/~mariusor/go-activitypub/go-ap/index.md).
+<!-- Expanded [documentation](https://man.sr.ht/~mariusor/go-activitypub/lib/index.md) -->
+For more details you can have a look at [the expanded documentation](https://go-activitypub.federated.id/lib).
 
 For discussions about the projects you can write to the discussions mailing list: [~mariusor/go-activitypub-discuss@lists.sr.ht](mailto:~mariusor/go-activitypub-discuss@lists.sr.ht)
 
