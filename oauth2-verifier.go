@@ -93,7 +93,7 @@ func firstOrItem(it vocab.Item) (vocab.Item, error) {
 	if vocab.IsNil(it) {
 		return it, nil
 	}
-	if it.IsCollection() {
+	if vocab.IsCollection(it) {
 		_ = vocab.OnCollectionIntf(it, func(col vocab.CollectionInterface) error {
 			it = col.Collection().First()
 			return nil
