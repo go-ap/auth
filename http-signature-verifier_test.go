@@ -47,7 +47,7 @@ func TestHTTPSignature(t *testing.T) {
 		},
 		{
 			name:    "with storage",
-			initFns: []InitFn{WithStorage(st())},
+			initFns: []InitFn{WithOAuth2Storage(st())},
 			want:    httpSigVerifier{loader: &localRemoteLoader{st: st()}, l: lw.Nil()},
 		},
 	}

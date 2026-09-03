@@ -119,7 +119,7 @@ func TestOAuth2(t *testing.T) {
 		},
 		{
 			name:    "with storage",
-			initFns: []InitFn{WithStorage(st())},
+			initFns: []InitFn{WithOAuth2Storage(st())},
 			want:    oauthVerifier{st: st(), l: lw.Nil()},
 		},
 	}
@@ -142,12 +142,12 @@ func compareOAuthVerifier(x, y any) bool {
 	xe := x.(oauthVerifier)
 	ye := y.(oauthVerifier)
 	cx := config{
-		st: xe.st,
-		l:  xe.l,
+		ost: xe.st,
+		l:   xe.l,
 	}
 	cy := config{
-		st: ye.st,
-		l:  ye.l,
+		ost: ye.st,
+		l:   ye.l,
 	}
 	return compareConfig(cx, cy)
 }

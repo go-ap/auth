@@ -21,7 +21,7 @@ type oauthVerifier struct {
 func OAuth2(initFns ...InitFn) oauthVerifier {
 	c := Config(initFns...)
 	return oauthVerifier{
-		st: c.st,
+		st: c.ost,
 		l:  c.l,
 	}
 }

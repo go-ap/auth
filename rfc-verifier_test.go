@@ -136,7 +136,7 @@ func (m mockLoader) ResolveKey(_ context.Context, id string) (httpsig.Key, error
 	return key, nil
 }
 
-func ldr(c ActivityPubClient, st oauthStore) *localRemoteLoader {
+func ldr(c ActivityPubClient, st readStore) *localRemoteLoader {
 	return &localRemoteLoader{c: c, st: st}
 }
 

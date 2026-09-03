@@ -36,8 +36,8 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name:    "with storage",
-			initFns: []InitFn{WithStorage(st())},
-			want:    config{st: st(), l: lw.Nil()},
+			initFns: []InitFn{WithOAuth2Storage(st())},
+			want:    config{ost: st(), l: lw.Nil()},
 		},
 	}
 	for _, tt := range tests {
@@ -64,8 +64,8 @@ func compareConfig(x, y any) bool {
 	if !reflect.ValueOf(xe.l).Equal(reflect.ValueOf(ye.l)) {
 		return false
 	}
-	if xe.st == nil || ye.st == nil {
-		return xe.st == ye.st
+	if xe.ost == nil || ye.ost == nil {
+		return xe.ost == ye.ost
 	}
 	return true
 }
@@ -133,8 +133,8 @@ func TestResolver(t *testing.T) {
 		},
 		{
 			name:    "with storage",
-			initFns: []InitFn{WithStorage(st())},
-			want:    actorResolver{st: st(), l: lw.Nil()},
+			initFns: []InitFn{WithOAuth2Storage(st())},
+			want:    actorResolver{ost: st(), l: lw.Nil()},
 		},
 		{
 			name:    "with client - mostly useless",
@@ -192,7 +192,7 @@ func Test_actorResolver_Verify(t *testing.T) {
 		},
 		{
 			name:    "no header",
-			a:       actorResolver{st: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
+			a:       actorResolver{ost: st(), l: lw.Dev(lw.SetOutput(t.Output()))},
 			r:       mockGetReq(),
 			want:    AnonymousActor,
 			wantErr: nil,
@@ -200,8 +200,8 @@ func Test_actorResolver_Verify(t *testing.T) {
 		{
 			name: "failed bearer",
 			a: actorResolver{
-				st: st(),
-				l:  lw.Dev(lw.SetOutput(t.Output())),
+				ost: st(),
+				l:   lw.Dev(lw.SetOutput(t.Output())),
 			},
 			r:       mockGetReq(url.Values{"Authorization": []string{"Bearer -invalid-"}}),
 			want:    AnonymousActor,
@@ -210,8 +210,8 @@ func Test_actorResolver_Verify(t *testing.T) {
 		{
 			name: "good bearer",
 			a: actorResolver{
-				st: st(mockActor(), mockAccess("test", defaultClient)),
-				l:  lw.Dev(lw.SetOutput(t.Output())),
+				ost: st(mockActor(), mockAccess("test", defaultClient)),
+				l:   lw.Dev(lw.SetOutput(t.Output())),
 			},
 			r:    mockGetReq(url.Values{"Authorization": []string{"Bearer test"}}),
 			want: mockActor(),
@@ -219,8 +219,8 @@ func Test_actorResolver_Verify(t *testing.T) {
 		{
 			name: "bad signature",
 			a: actorResolver{
-				st: st(mockActor()),
-				l:  lw.Dev(lw.SetOutput(t.Output())),
+				ost: st(mockActor()),
+				l:   lw.Dev(lw.SetOutput(t.Output())),
 			},
 			r:       mockGetReq(url.Values{"Signature": []string{"bad"}}),
 			want:    AnonymousActor,

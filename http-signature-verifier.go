@@ -26,7 +26,7 @@ type httpSigVerifier struct {
 func HTTPSignature(initFns ...InitFn) httpSigVerifier {
 	c := Config(initFns...)
 	v := httpSigVerifier{
-		loader: &localRemoteLoader{c: c.c, st: c.st},
+		loader: &localRemoteLoader{c: c.c, st: c.ast},
 		ncFn:   c.ncFn,
 		l:      c.l,
 	}

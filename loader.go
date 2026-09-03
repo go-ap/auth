@@ -30,7 +30,8 @@ type ActivityPubClient interface {
 type config struct {
 	c    ActivityPubClient
 	ncFn httpsig.NonceChecker
-	st   oauthStore
+	ost  oauthStore
+	ast  readStore
 	l    log.Logger
 }
 
@@ -53,9 +54,18 @@ func WithLogger(l log.Logger) InitFn {
 	}
 }
 
-func WithStorage(s oauthStore) InitFn {
+// WithStorage sets the storage for verifying actors in local storage.
+func WithStorage(s readStore) InitFn {
 	return func(conf *config) {
-		conf.st = s
+		conf.ast = s
+	}
+}
+
+// WithOAuth2Storage sets the storage for verifying OAuth Access tokens
+// against the local actor storage.
+func WithOAuth2Storage(s oauthStore) InitFn {
+	return func(conf *config) {
+		conf.ost = s
 	}
 }
 
@@ -81,7 +91,7 @@ func Verifier(initFns ...InitFn) actorResolver {
 // * For OAuth2 it tries to load the matching local actor and use it further in the processing logic.
 // * For HTTP Signatures it tries to load the federated actor and use it further in the processing logic.
 func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
-	if a.st == nil {
+	if a.ost == nil {
 		return AnonymousActor, errInvalidStorage
 	}
 	if r == nil {
@@ -102,11 +112,11 @@ func (a actorResolver) Verify(r *http.Request) (vocab.Actor, error) {
 
 	switch typ {
 	case "Bearer":
-		ol := oauthVerifier{st: a.st}
+		ol := oauthVerifier{st: a.ost}
 		return ol.Verify(r)
 	case "Signature":
 		kl := httpSigVerifier{
-			loader: &localRemoteLoader{c: a.c, st: a.st},
+			loader: &localRemoteLoader{c: a.c, st: a.ast},
 			l:      a.l,
 		}
 		return kl.Verify(r)

@@ -18,7 +18,7 @@ import (
 func Test_keyLoader_loadKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		storage   oauthStore
+		storage   readStore
 		arg       string
 		handlerFn http.HandlerFunc
 		want      vocab.Actor
@@ -80,7 +80,7 @@ func Test_keyLoader_loadKey(t *testing.T) {
 func Test_keyLoader_loadRemoteKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		storage   oauthStore
+		storage   readStore
 		arg       vocab.IRI
 		handlerFn http.HandlerFunc
 		want      vocab.Actor
