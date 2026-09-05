@@ -52,6 +52,27 @@ func Test_keyLoader_loadKey(t *testing.T) {
 				_, _ = w.Write(payload)
 			}),
 		},
+		{
+			name: "actor exists locally, but public key is invalid",
+			storage: st(func() vocab.Item {
+				act := mockActor()
+				act.PublicKey.PublicKeyPem = act.PublicKey.PublicKeyPem[:0]
+				return act
+			}()),
+			handlerFn: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				status := http.StatusOK
+				act := mockActor()
+				act.PublicKey.PublicKeyPem = act.PublicKey.PublicKeyPem[:0]
+				payload, _ := jsonld.Marshal(act)
+
+				w.Header().Set("Cache-Control", "public")
+				w.WriteHeader(status)
+				_, _ = w.Write(payload)
+			}),
+			arg:     "http://example.com/~jdoe",
+			want:    AnonymousActor,
+			wantErr: errors.Newf("invalid public key with empty PEM value"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,8 +91,8 @@ func Test_keyLoader_loadKey(t *testing.T) {
 			if !cmp.Equal(act, tt.want, EquateItems) {
 				t.Errorf("GetKey() got actor = %s", cmp.Diff(tt.want, act, EquateItems))
 			}
-			if !cmp.Equal(key, tt.wantKey, EquatePublicKeys) {
-				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.wantKey, key, EquatePublicKeys))
+			if !cmp.Equal(key, tt.wantKey) {
+				t.Errorf("GetKey() got key = %s", cmp.Diff(tt.wantKey, key))
 			}
 		})
 	}
@@ -114,7 +135,7 @@ func Test_keyLoader_loadRemoteKey(t *testing.T) {
 				PublicKey: vocab.PublicKey{
 					ID:           vocab.IRI("http://example.com/~jdoe/key"),
 					Owner:        vocab.IRI("http://example.com/~jdoe"),
-					PublicKeyPem: pemEncodePublicKey(prv),
+					PublicKeyPem: pemEncodePublicKeyFromPrivate(prv),
 				},
 			},
 			wantKey: publicKey("http://example.com/~jdoe/key", "http://example.com/~jdoe"),
@@ -336,7 +357,7 @@ func publicKey(id, owner vocab.IRI) *vocab.PublicKey {
 	return &vocab.PublicKey{
 		ID:           id,
 		Owner:        owner,
-		PublicKeyPem: pemEncodePublicKey(prv),
+		PublicKeyPem: pemEncodePublicKeyFromPrivate(prv),
 	}
 }
 

@@ -53,7 +53,7 @@ func TestOAuth2_VerifyAccessCode(t *testing.T) {
 
 var prv, _ = rsa.GenerateKey(rand.Reader, 1024)
 
-func pemEncodePublicKey(prvKey *rsa.PrivateKey) string {
+func pemEncodePublicKeyFromPrivate(prvKey *rsa.PrivateKey) string {
 	pubKey := prvKey.PublicKey
 	pubEnc, err := x509.MarshalPKIXPublicKey(&pubKey)
 	if err != nil {
@@ -71,7 +71,7 @@ func mockActorKey(id, owner vocab.IRI, prv *rsa.PrivateKey) vocab.PublicKey {
 	return vocab.PublicKey{
 		ID:           id,
 		Owner:        owner,
-		PublicKeyPem: pemEncodePublicKey(prv),
+		PublicKeyPem: pemEncodePublicKeyFromPrivate(prv),
 	}
 }
 

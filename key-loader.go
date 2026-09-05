@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
@@ -152,15 +153,32 @@ func (k localRemoteLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.Publ
 	return act, key, err
 }
 
+func validatePublicKey(pub vocab.PublicKey) error {
+	if len(pub.PublicKeyPem) == 0 {
+		return errors.Newf("invalid public key with empty PEM value")
+	}
+	if !strings.HasPrefix(pub.PublicKeyPem, "-----") {
+		debug := pub.PublicKeyPem[:min(len(pub.PublicKeyPem), max(20, strings.Index(pub.PublicKeyPem, "\n")))]
+		return errors.Newf("invalid public key header %s", debug)
+	}
+	return nil
+}
+
 func (k localRemoteLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey, error) {
 	// NOTE(marius): we first try to verify with the copy of the key stored locally if it exists.
-	actor, key, _ := k.loadLocalKey(vocab.IRI(keyID))
-	if key != nil {
+	actor, key, err := k.loadLocalKey(vocab.IRI(keyID))
+	if err == nil && key != nil && validatePublicKey(actor.PublicKey) == nil {
 		return actor, key, nil
 	}
-
 	// NOTE(marius): if local verification fails, we try to fetch a fresh copy of the key and try again.
-	return k.loadRemoteKey(vocab.IRI(keyID))
+	actor, key, err = k.loadRemoteKey(vocab.IRI(keyID))
+	if err != nil {
+		return AnonymousActor, nil, err
+	}
+	if err = validatePublicKey(actor.PublicKey); err != nil {
+		return AnonymousActor, nil, err
+	}
+	return actor, key, nil
 }
 
 func (k *localRemoteLoader) ResolveKey(_ context.Context, id string) (httpsig.Key, error) {

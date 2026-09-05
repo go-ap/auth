@@ -235,7 +235,7 @@ var (
 		PublicKey: vocab.PublicKey{
 			ID:           "https://signer.example/actor#main-key",
 			Owner:        "https://signer.example/actor",
-			PublicKeyPem: pemEncodePublicKey(mitraPrv),
+			PublicKeyPem: pemEncodePublicKeyFromPrivate(mitraPrv),
 		},
 	}
 
