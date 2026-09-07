@@ -490,6 +490,7 @@ func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		k := httpSigVerifier{loader: mldr(actor, s2s.KeyTypePSS), l: lw.Dev(lw.SetOutput(t.Output()))}
+		r.URL.Scheme = "http"
 		if _, err := k.VerifyRFCSignature(r); err != nil {
 			t.Errorf("VerifyRFCSignature() unexpected error = %v", err)
 			return
@@ -498,15 +499,6 @@ func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
 
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
-
-	buildReq := func() *http.Request {
-		req := mockPostReq([]byte(`{"hello": "world"}`))
-		req.URL, _ = url.Parse(srv.URL)
-		req.Host = req.URL.Host
-		req.Header.Add("Content-Type", "application/json")
-		req.Header.Add("Host", req.Host)
-		return req
-	}
 
 	signer := s2s.New(s2s.WithActor(&actor, prvKeyRSA1), s2s.WithNonce(emptyNonceFn), s2s.WithAlg(s2s.KeyTypePSS))
 
@@ -517,7 +509,7 @@ func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
 
 	for i := range 2 {
 		t.Run(fmt.Sprintf("iter %d", i), func(t *testing.T) {
-			res, err := cl.Do(buildReq())
+			res, err := cl.Do(mockPostReq([]byte(`{"hello": "world"}`)))
 			if err != nil {
 				t.Fatalf("VerifyRFCSignature() round trip unexpected error = %+v", err)
 			}

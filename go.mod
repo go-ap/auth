@@ -1,13 +1,13 @@
 module github.com/go-ap/auth
 
-go 1.25.0
+go 1.26.0
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20260818081520-a466820a662e
 	github.com/dadrus/httpsig v0.9.0
 	github.com/dunglas/httpsfv v1.1.1
 	github.com/go-ap/activitypub v0.0.0-20260831124014-72a94f5a8a10
-	github.com/go-ap/client v0.0.0-20260831130403-5680ad0797ed
+	github.com/go-ap/client v0.0.0-20260907160337-3a3e5aea2a0b
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
 	github.com/go-ap/filters v0.0.0-20260831130242-f116eb702ce2
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
@@ -51,7 +51,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect

@@ -269,7 +269,7 @@ oQIDAQAB
 	}()
 
 	// NOTE(marius): values from the Example RSA key test cases in the HTTP Signatures RFC9421
-	// https://www.rfc-editor.org/rfc/rfc9421.html#appendix-B.1.1
+	//  https://www.rfc-editor.org/rfc/rfc9421.html#appendix-B.1.1
 	prvRSA1 = `-----BEGIN RSA PRIVATE KEY-----
 MIIEqAIBAAKCAQEAhAKYdtoeoy8zcAcR874L8cnZxKzAGwd7v36APp7Pv6Q2jdsP
 BRrwWEBnez6d0UDKDwGbc6nxfEXAy5mbhgajzrw3MOEt8uA5txSKobBpKDeBLOsd
@@ -622,13 +622,15 @@ G6aFKaqQfOXKCyWoUiVknQJAXrlgySFci/2ueKlIE1QqIiLSZ8V8OlpFLRnb1pzI
 )
 
 func mockPostReq(body []byte, hh ...url.Values) *http.Request {
-	r := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "http://example.com/", bytes.NewReader(body))
 	for _, h := range hh {
 		for k, v := range h {
 			r.Header[k] = v
 		}
 	}
-	r.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	r.Header.Set("Host", "example.com")
+	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	r.Header.Set("Content-Type", "application/json")
 	r.RequestURI = ""
 	return r
 }

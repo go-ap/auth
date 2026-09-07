@@ -76,8 +76,34 @@ func (k hardcodedAlgResolver) ResolveKey(ctx context.Context, keyID string) (htt
 	return key, err
 }
 
+func HTTPSigMsgFromRequest(req *http.Request) *httpsig.Message {
+	msg := httpsig.MessageFromRequest(req)
+	// NOTE(marius): on incoming requests the req.URL.Host is empty,
+	//  but to match the signature base it needs to be completed with the authority
+	if msg.URL.Host == "" {
+		msg.URL.Host = msg.Authority
+	}
+	if msg.URL.Path == "" {
+		msg.URL.Path = "/"
+	}
+	// NOTE(marius): similarly if the protocol is empty we either hardcoded to https,
+	//  or we load it from the X-Forwarded-Proto if we're behind proxy.
+	if msg.URL.Scheme == "" {
+		msg.URL.Scheme = "https"
+		if proto := msg.Header.Get("X-Forwarded-Proto"); proto != "" {
+			msg.URL.Scheme = proto
+		}
+	}
+	// NOTE(marius): for some fetch requests, we have a non empty fragment
+	//  I'm not clear if this case is handled correctly on the verifier side.
+	if msg.URL.Fragment != "" {
+		req.URL.Fragment = ""
+	}
+	return msg
+}
+
 // VerifyRFCSignature checks for RFC9421 compatible HTTP signatures.
-// It is based on the common-fate/httpsig/verifier.Parse functionality adapted for go-ap.
+// It is based on the github.com/dadrus/httpsig.Verifier() functionality adapted for go-ap.
 func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, error) {
 	if req == nil {
 		return AnonymousActor, errInvalidRequest
@@ -106,10 +132,7 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 		return AnonymousActor, err
 	}
 
-	msg := httpsig.MessageFromRequest(req)
-	if forwardedHost := req.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
-		msg.Authority = forwardedHost
-	}
+	msg := HTTPSigMsgFromRequest(req)
 	if err = verifier.Verify(msg); err != nil {
 		k.l.WithContext(lw.Ctx{"headers": msg.Header, "authority": msg.Authority, "url": msg.URL.String(), "err": err}).Warnf("unable to verify actor")
 		if act := resolver.Actor(); !vocab.IsNil(act) && act.ID != "" {
