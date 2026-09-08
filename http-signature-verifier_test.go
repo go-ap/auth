@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -69,19 +71,27 @@ func areKeyLoader(a, b any) bool {
 func compareKeyLoader(x, y any) bool {
 	xe := x.(httpSigVerifier)
 	ye := y.(httpSigVerifier)
-	//xst, _ := xe.loader.(oauthStore)
-	//yst, _ := ye.loader.(oauthStore)
-	cx := config{
-		//c:  xe.loader.c,
-		//st: xst,
-		l: xe.l,
+	if !sameFns(xe.ncFn, ye.ncFn) {
+		return false
 	}
-	cy := config{
-		//c:  ye.loader.c,
-		//st: yst,
-		l: ye.l,
+	return (xe.l == nil && ye.l == nil) || reflect.DeepEqual(xe.l, ye.l)
+}
+
+func sameFns(f1, f2 any) bool {
+	if f1 == nil || f2 == nil {
+		return f1 == nil && f2 == nil
 	}
-	return compareConfig(cx, cy)
+	p1 := reflect.ValueOf(f1).Pointer()
+	p2 := reflect.ValueOf(f2).Pointer()
+	if p1 == p2 {
+		return true
+	}
+	if p1 == 0 || p2 == 0 {
+		return false
+	}
+	s1, l1 := runtime.FuncForPC(p1).FileLine(p1)
+	s2, l2 := runtime.FuncForPC(p2).FileLine(p2)
+	return s1 == s2 && l1 == l2
 }
 
 var equateKeyLoader = cmp.FilterValues(areKeyLoader, cmp.Comparer(compareKeyLoader))

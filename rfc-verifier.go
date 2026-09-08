@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"sync"
 
-	"git.sr.ht/~mariusor/lw"
 	"github.com/dadrus/httpsig"
 	"github.com/dunglas/httpsfv"
 	vocab "github.com/go-ap/activitypub"
@@ -134,7 +133,6 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 
 	msg := HTTPSigMsgFromRequest(req)
 	if err = verifier.Verify(msg); err != nil {
-		k.l.WithContext(lw.Ctx{"headers": msg.Header, "authority": msg.Authority, "url": msg.URL.String(), "err": err}).Warnf("unable to verify actor")
 		if act := resolver.Actor(); !vocab.IsNil(act) && act.ID != "" {
 			err = errors.Annotatef(err, "actor IRI %s", act.ID)
 		}

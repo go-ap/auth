@@ -61,7 +61,7 @@ func compareConfig(x, y any) bool {
 	if !cmp.Equal(xe.c, ye.c, cmpopts.IgnoreUnexported(http.Client{})) {
 		return false
 	}
-	if !reflect.ValueOf(xe.l).Equal(reflect.ValueOf(ye.l)) {
+	if !reflect.DeepEqual(xe.l, ye.l) {
 		return false
 	}
 	if xe.ost == nil || ye.ost == nil {
