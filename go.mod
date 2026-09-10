@@ -3,11 +3,11 @@ module github.com/go-ap/auth
 go 1.26.0
 
 require (
-	git.sr.ht/~mariusor/lw v0.0.0-20260908112334-5e5fb7ebd609
+	git.sr.ht/~mariusor/lw v0.0.0-20260910124117-d80376e1433e
 	github.com/dadrus/httpsig v0.9.0
 	github.com/dunglas/httpsfv v1.1.1
 	github.com/go-ap/activitypub v0.0.0-20260909093825-f72cfa142bd0
-	github.com/go-ap/client v0.0.0-20260909101650-34d206fc236c
+	github.com/go-ap/client v0.0.0-20260910124519-85c4b1876743
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
 	github.com/go-ap/filters v0.0.0-20260909101441-177fa69736fd
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
