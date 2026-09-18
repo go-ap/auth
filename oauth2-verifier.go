@@ -86,7 +86,7 @@ var AnonymousActor = vocab.Actor{
 	ID: vocab.PublicNS,
 	// NOTE(marius): this is not a standard ActivityPub type, so it might confuse applications
 	Type: vocab.ActorType,
-	Name: vocab.DefaultNaturalLanguage("Anonymous"),
+	Name: vocab.DefaultLangValue("Anonymous"),
 }
 
 func firstOrItem(it vocab.Item) (vocab.Item, error) {
