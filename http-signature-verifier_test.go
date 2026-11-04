@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,7 +25,6 @@ import (
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
-	"github.com/go-ap/client/s2s"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 	draft "github.com/go-fed/httpsig"
@@ -157,12 +157,12 @@ func Test_httpSigVerifier_Verify(t *testing.T) {
 				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
 			}),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(fmt.Errorf("%w: %s not present in message", httpsig.ErrCanonicalization, "content-digest"), "verification failed"),
+			wantErr: errors.Annotatef(fmt.Errorf("no applicable digest found"), "verification failed"),
 		},
 		{
 			name:        "minimal signature using rsa-sha512 example",
 			sigDuration: enoughForOldTests,
-			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519"), s2s.KeyTypePKCS),
+			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519"), KeyTypePKCS),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
 				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},
@@ -634,9 +634,7 @@ G6aFKaqQfOXKCyWoUiVknQJAXrlgySFci/2ueKlIE1QqIiLSZ8V8OlpFLRnb1pzI
 func mockPostReq(body []byte, hh ...url.Values) *http.Request {
 	r := httptest.NewRequest(http.MethodPost, "http://example.com/", bytes.NewReader(body))
 	for _, h := range hh {
-		for k, v := range h {
-			r.Header[k] = v
-		}
+		maps.Copy(r.Header, h)
 	}
 	r.Header.Set("Host", "example.com")
 	r.Header.Set("Content-Length", strconv.Itoa(len(body)))

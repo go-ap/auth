@@ -77,8 +77,10 @@ func mockActorGenKey(id, owner vocab.IRI, prv privateKey) vocab.PublicKey {
 
 type mockLoader struct {
 	it  vocab.Actor
-	alg s2s.KeyEncoding
+	alg KeyEncoding
 }
+
+var _ httpsig.KeyResolver = mockLoader{}
 
 func (m mockLoader) loadKey(_ string) (vocab.Actor, *vocab.PublicKey, error) {
 	return m.it, &m.it.PublicKey, nil
@@ -88,35 +90,28 @@ func (m mockLoader) Actor() vocab.Actor {
 	return m.it
 }
 
-func (m mockLoader) ResolveKey(_ context.Context, id string) (httpsig.Key, error) {
-	key := httpsig.Key{KeyID: string(m.it.PublicKey.ID)}
+func (m mockLoader) ResolveKey(_ context.Context, info httpsig.SignatureInfo) (httpsig.KeyInfo, error) {
+	key := httpsig.Key{}
 	pkey, _ := toCryptoPublicKey(m.it.PublicKey)
 	switch pk := pkey.(type) {
 	case *rsa.PublicKey:
 		switch pk.Size() {
-		case 256:
+		case 256, 384:
 			switch m.alg {
-			case s2s.KeyTypePSS:
-				key.Algorithm = httpsig.RsaPssSha256
-			default:
-				key.Algorithm = httpsig.RsaPkcs1v15Sha256
-			}
-		case 384:
-			switch m.alg {
-			case s2s.KeyTypePSS:
+			case KeyTypePSS:
 				key.Algorithm = httpsig.RsaPssSha384
 			default:
 				key.Algorithm = httpsig.RsaPkcs1v15Sha384
 			}
 		case 512:
 			switch m.alg {
-			case s2s.KeyTypePSS:
+			case KeyTypePSS:
 				key.Algorithm = httpsig.RsaPssSha512
 			default:
 				key.Algorithm = httpsig.RsaPkcs1v15Sha512
 			}
 		}
-		key.Key = pk
+		key.Material = pk
 	case *ecdsa.PublicKey:
 		if p := pk.Params(); p != nil {
 			switch p.BitSize {
@@ -128,19 +123,31 @@ func (m mockLoader) ResolveKey(_ context.Context, id string) (httpsig.Key, error
 				key.Algorithm = httpsig.EcdsaP521Sha512
 			}
 		}
-		key.Key = pk
+		key.Material = pk
 	case ed25519.PublicKey:
 		key.Algorithm = httpsig.Ed25519
-		key.Key = pk
+		key.Material = pk
 	}
-	return key, nil
+	alg, ok := info.Parameters.Alg()
+	if ok {
+		key.Algorithm = alg
+	}
+	return httpsig.KeyInfo{Key: key}, nil
 }
 
 func ldr(c ActivityPubClient, st readStore) *localRemoteLoader {
 	return &localRemoteLoader{c: c, st: st}
 }
 
-func mldr(it vocab.Actor, alg s2s.KeyEncoding) mockLoader {
+type KeyEncoding int
+
+const (
+	KeyTypeUnknown KeyEncoding = 0
+	KeyTypePKCS    KeyEncoding = 1
+	KeyTypePSS     KeyEncoding = 2
+)
+
+func mldr(it vocab.Actor, alg KeyEncoding) mockLoader {
 	return mockLoader{it: it, alg: alg}
 }
 
@@ -159,12 +166,16 @@ func (fn funcKeyLoader) Actor() vocab.Actor {
 	return act
 }
 
-func (fn funcKeyLoader) ResolveKey(_ context.Context, keyID string) (httpsig.Key, error) {
+func (fn funcKeyLoader) ResolveKey(_ context.Context, sigInfo httpsig.SignatureInfo) (httpsig.KeyInfo, error) {
+	keyID, ok := sigInfo.Parameters.KeyID()
+	if !ok {
+		return httpsig.KeyInfo{}, errors.Newf("invalid keyID in the signature parameters")
+	}
 	_, pk, err := fn(keyID)
 	if err != nil {
-		return httpsig.Key{}, err
+		return httpsig.KeyInfo{}, err
 	}
-	key := httpsig.Key{KeyID: string(pk.ID)}
+	key := httpsig.Key{ /*KeyID: string(pk.ID)*/ }
 	pkey, _ := toCryptoPublicKey(*pk)
 	switch pk := pkey.(type) {
 	case *rsa.PublicKey:
@@ -176,7 +187,7 @@ func (fn funcKeyLoader) ResolveKey(_ context.Context, keyID string) (httpsig.Key
 		case 512:
 			key.Algorithm = httpsig.RsaPkcs1v15Sha512
 		}
-		key.Key = pk
+		key.Material = pk
 	case *ecdsa.PublicKey:
 		if p := pk.Params(); p != nil {
 			switch p.BitSize {
@@ -188,12 +199,12 @@ func (fn funcKeyLoader) ResolveKey(_ context.Context, keyID string) (httpsig.Key
 				key.Algorithm = httpsig.EcdsaP521Sha512
 			}
 		}
-		key.Key = pk
+		key.Material = pk
 	case ed25519.PublicKey:
 		key.Algorithm = httpsig.Ed25519
-		key.Key = pk
+		key.Material = pk
 	}
-	return key, err
+	return httpsig.KeyInfo{Key: key}, err
 }
 
 var (
@@ -318,7 +329,7 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		{
 			name:        "GET rfc9421 - B.2.1. example - wrong private key",
 			sigDuration: enoughForOldTests,
-			loader:      mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss"), alg: s2s.KeyTypePSS},
+			loader:      mockLoader{it: mockRFCActor(prvKeyRSA1, "test-key-rsa-pss"), alg: KeyTypePSS},
 			req: mockGetReq(url.Values{
 				"Signature-Input": []string{`sig-b21=();created=1618884473;keyid="test-key-rsa-pss";nonce="b3k2pp5k7z-50gnwp.yemd"`},
 				"Signature":       []string{`sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:`},
@@ -339,19 +350,19 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		},
 		{
 			name:        "minimal signature using rsa-sha512 example - no content-digest",
-			sigDuration: time.Minute,
+			sigDuration: enoughForOldTests,
 			loader:      ldr(client.New(), st(mockRFCActor(prvKeyRSA1, "#main"), mockActorGenKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prvKeyRSA1))),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b22=("@authority" "content-digest" "@query-param";name="Pet");created=1618884473;keyid="http://example.com/~jdoe#main";tag="header-example"`},
 				"Signature":       []string{`sig-b22=:LjbtqUbfmvjj5C5kr1Ugj4PmLYvx9wVjZvD9GsTT4F7GrcQEdJzgI9qHxICagShLRiLMlAJjtq6N4CDfKtjvuJyE5qH7KT8UCMkSowOB4+ECxCmT8rtAmj/0PIXxi0A0nxKyB09RNrCQibbUjsLS/2YyFYXEu4TRJQzRw1rLEuEfY17SARYhpTlaqwZVtR8NV7+4UKkjqpcAoFqWFQh62s7Cl+H2fjBSpqfZUJcsIk4N6wiKYd4je2U/lankenQ99PZfB4jY3I5rSV2DSBVkSFsURIjYErOs0tFTQosMTAoxk//0RoKUqiYY8Bh0aaUEb0rQl3/XaVe4bXTugEjHSw==:`},
 			}),
 			want:    AnonymousActor,
-			wantErr: errors.Annotatef(fmt.Errorf("%w: %s not present in message", httpsig.ErrCanonicalization, "content-digest"), "verification failed"),
+			wantErr: errors.Annotatef(fmt.Errorf("no applicable digest found"), "verification failed"),
 		},
 		{
 			name:        "minimal signature using rsa-sha512 example",
 			sigDuration: enoughForOldTests,
-			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519"), s2s.KeyTypeUnknown),
+			loader:      mldr(mockRFCActor(prvKeyEd25519, "test-key-ed25519"), KeyTypeUnknown),
 			req: rfcMockReq(url.Values{
 				"Signature-Input": []string{`sig-b26=("date" "@method" "@path" "@authority" "content-type" "content-length");created=1618884473;keyid="test-key-ed25519"`},
 				"Signature":       []string{`sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:`},
@@ -395,7 +406,7 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		},
 		{
 			name:   "mitra prod example",
-			loader: mldr(mitraActorFn, s2s.KeyTypePKCS),
+			loader: mldr(mitraActorFn, KeyTypePKCS),
 			req: func() *http.Request {
 				//POST /inbox HTTP/1.1
 				//Host: marius.federated.id
@@ -430,7 +441,7 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 		},
 		{
 			name:   "tags.pub prod example",
-			loader: mldr(emptyActorWithTagsPubKeyFn, s2s.KeyTypePKCS),
+			loader: mldr(emptyActorWithTagsPubKeyFn, KeyTypePKCS),
 			req: func() *http.Request {
 				//POST /inbox HTTP/1.1
 				//Host: beta.littr.me
@@ -484,12 +495,11 @@ func Test_httpSigVerifier_VerifyRFCSignature(t *testing.T) {
 }
 
 func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
-	emptyNonceFn := func() (string, error) { return "", nil }
 	sigMaxAgeDuration = enoughForOldTests
 	actor := mockRFCActor(prvKeyRSA1, "http://example.com/~jdoe#main")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		k := httpSigVerifier{loader: mldr(actor, s2s.KeyTypePSS), l: lw.Dev(lw.SetOutput(t.Output()))}
+		k := httpSigVerifier{loader: mldr(actor, KeyTypePSS), l: lw.Dev(lw.SetOutput(t.Output()))}
 		r.URL.Scheme = "http"
 		if _, err := k.VerifyRFCSignature(r); err != nil {
 			t.Errorf("VerifyRFCSignature() unexpected error = %v", err)
@@ -500,7 +510,7 @@ func Test_httpSigVerifier_VerifyRFCSignature_empty_nonce_check(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	signer := s2s.New(s2s.WithActor(&actor, prvKeyRSA1), s2s.WithNonce(emptyNonceFn), s2s.WithAlg(s2s.KeyTypePSS))
+	signer := s2s.New(s2s.WithActor(&actor, prvKeyRSA1))
 
 	cl := client.New(
 		client.WithHTTPClient(srv.Client()),

@@ -432,48 +432,35 @@ func Test_keyLoader_loadLocalKey(t *testing.T) {
 
 func Test_rfcAlgorithmFromPublicKey(t *testing.T) {
 	tests := []struct {
-		name    string
-		pub     vocab.PublicKey
-		want    httpsig.SignatureAlgorithm
-		wantKey crypto.PublicKey
-		wantErr error
+		name string
+		pub  crypto.PublicKey
+		want httpsig.SignatureAlgorithm
 	}{
 		{
-			name:    "empty",
-			pub:     vocab.PublicKey{},
-			wantErr: errors.Newf("unable to decode PEM payload for public key"),
+			name: "empty",
+			want: httpsig.SignatureAlgorithm("unknown"),
 		},
 		{
-			name:    "rsa256",
-			pub:     mockActorGenKey("test", "test", prvKeyRSA),
-			want:    httpsig.RsaPkcs1v15Sha256,
-			wantKey: pubKeyRSA,
+			name: "rsa256",
+			pub:  prvKeyRSA.Public(),
+			want: httpsig.RsaPkcs1v15Sha256,
 		},
 		{
-			name:    "ecdsa256",
-			pub:     mockActorGenKey("test", "test", prvKeyECDSA),
-			want:    httpsig.EcdsaP256Sha256,
-			wantKey: &prvKeyECDSA.PublicKey,
+			name: "ecdsa256",
+			pub:  prvKeyECDSA.Public(),
+			want: httpsig.EcdsaP256Sha256,
 		},
 		{
-			name:    "ed25519",
-			pub:     mockActorGenKey("test", "test", prvKeyEd25519),
-			want:    httpsig.Ed25519,
-			wantKey: pubKeyEd25519,
+			name: "ed25519",
+			pub:  prvKeyEd25519.Public(),
+			want: httpsig.Ed25519,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, key, err := rfcAlgorithmFromPublicKey(&tt.pub)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("rfcAlgorithmFromPublicKey() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
+			got := rfcAlgorithmFromPublicKey(tt.pub)
 			if got != tt.want {
 				t.Errorf("rfcAlgorithmFromPublicKey() got = %v, want %v", got, tt.want)
-			}
-			if !cmp.Equal(key, tt.wantKey, EquatePublicKeys) {
-				t.Errorf("rfcAlgorithmFromPublicKey() got1 = %s", cmp.Diff(tt.wantKey, key, EquatePublicKeys))
 			}
 		})
 	}
