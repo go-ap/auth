@@ -29,7 +29,7 @@ type ActivityPubClient interface {
 
 type config struct {
 	c    ActivityPubClient
-	ncFn httpsig.NonceChecker
+	ncFn httpsig.NonceGetter
 	ost  oauthStore
 	ast  readStore
 	l    log.Logger
@@ -75,7 +75,7 @@ func WithClient(cl ActivityPubClient) InitFn {
 	}
 }
 
-func WithNonceChecker(nc httpsig.NonceChecker) InitFn {
+func WithNonceChecker(nc httpsig.NonceGetter) InitFn {
 	return func(c *config) {
 		c.ncFn = nc
 	}

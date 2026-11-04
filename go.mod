@@ -1,13 +1,13 @@
 module github.com/go-ap/auth
 
-go 1.26.0
+go 1.26.9
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20260917101519-2e0b081e156c
-	github.com/dadrus/httpsig v0.9.0
+	github.com/dadrus/httpsig v0.10.0
 	github.com/dunglas/httpsfv v1.1.2
 	github.com/go-ap/activitypub v0.0.0-20261101142956-a76d71dd72b0
-	github.com/go-ap/client v0.0.0-20261101144759-895de0be5faf
+	github.com/go-ap/client v0.0.0-20261105074843-7acbcac952b9
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
 	github.com/go-ap/filters v0.0.0-20261101144638-4754d87b7869
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38

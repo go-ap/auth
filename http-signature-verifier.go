@@ -18,7 +18,7 @@ import (
 
 type httpSigVerifier struct {
 	loader keyLoader
-	ncFn   httpsig.NonceChecker
+	ncFn   httpsig.NonceGetter
 	l      lw.Logger
 }
 

@@ -2,31 +2,13 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/dadrus/httpsig"
 	"github.com/dunglas/httpsfv"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/errors"
 )
-
-type syncedNonceStore struct {
-	sync.Map
-}
-
-var errInvalidNonce = func(n string) error { return fmt.Errorf("nonce already seen: %s", n) }
-
-func (s *syncedNonceStore) CheckNonce(_ context.Context, n httpsig.NonceValue) error {
-	if !n.Present {
-		return nil
-	}
-	if _, exists := s.LoadOrStore(n.Value, struct{}{}); exists {
-		return errInvalidNonce(n.Value)
-	}
-	return nil
-}
 
 type actorKeyLoader interface {
 	httpsig.KeyResolver
@@ -67,11 +49,8 @@ type hardcodedAlgResolver struct {
 	alg httpsig.SignatureAlgorithm
 }
 
-func (k hardcodedAlgResolver) ResolveKey(ctx context.Context, keyID string) (httpsig.Key, error) {
-	key, err := k.actorKeyLoader.ResolveKey(ctx, keyID)
-	if key.Algorithm == "" {
-		key.Algorithm = k.alg
-	}
+func (k hardcodedAlgResolver) ResolveKey(ctx context.Context, sigInfo httpsig.SignatureInfo) (httpsig.KeyInfo, error) {
+	key, err := k.actorKeyLoader.ResolveKey(ctx, sigInfo)
 	return key, err
 }
 
@@ -111,20 +90,16 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 	if !ok {
 		return AnonymousActor, errInvalidClient
 	}
-	if k.ncFn == nil {
-		k.ncFn = new(syncedNonceStore)
-	}
 	if alg := signatureInputAlgorithm(req.Header); alg != "" {
 		resolver = hardcodedAlgResolver{alg: alg, actorKeyLoader: resolver}
 	}
 	// Create a verifier
 	verifier, err := httpsig.NewVerifier(
 		resolver,
-		httpsig.WithNonceChecker(k.ncFn),
 		httpsig.WithValidityTolerance(sigValidDeltaDuration),
 		httpsig.WithMaxAge(sigMaxAgeDuration),
-		httpsig.WithCreatedTimestampRequired(false),
-		httpsig.WithExpiredTimestampRequired(false),
+		httpsig.WithCreatedTimestamp(false),
+		httpsig.WithExpiresTimestamp(false),
 		httpsig.WithValidateAllSignatures(),
 	)
 	if err != nil {
@@ -132,7 +107,7 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 	}
 
 	msg := HTTPSigMsgFromRequest(req)
-	if err = verifier.Verify(msg); err != nil {
+	if _, err = verifier.Verify(msg); err != nil {
 		if act := resolver.Actor(); !vocab.IsNil(act) && act.ID != "" {
 			err = errors.Annotatef(err, "actor IRI %s", act.ID)
 		}
