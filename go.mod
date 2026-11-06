@@ -4,10 +4,11 @@ go 1.26.9
 
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20260917101519-2e0b081e156c
+	github.com/carlmjohnson/requests v0.26.2
 	github.com/dadrus/httpsig v0.10.0
 	github.com/dunglas/httpsfv v1.1.2
 	github.com/go-ap/activitypub v0.0.0-20261101142956-a76d71dd72b0
-	github.com/go-ap/client v0.0.0-20261105074843-7acbcac952b9
+	github.com/go-ap/client v0.0.0-20261106130430-b74679e33937
 	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
 	github.com/go-ap/filters v0.0.0-20261101144638-4754d87b7869
 	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
@@ -22,7 +23,6 @@ require (
 	github.com/RoaringBitmap/roaring v1.9.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.29.0 // indirect
-	github.com/carlmjohnson/requests v0.26.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect

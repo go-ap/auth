@@ -20,7 +20,7 @@ import (
 func TestOAuth2_VerifyAccessCode(t *testing.T) {
 	tests := []struct {
 		name    string
-		st      oauthStore
+		st      AccessStore
 		code    string
 		want    vocab.Actor
 		wantErr error

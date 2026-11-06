@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -11,27 +12,38 @@ import (
 	"github.com/openshift/osin"
 )
 
-// readStore
-type readStore interface {
+// ReadStore is an ActivityPub storage implementation that can
+// return a valid Item object based on its IRI.
+// This functionality is used by both client to server and server to server
+// authorization mechanisms.
+type ReadStore interface {
 	// Load returns an Item or an ItemCollection from an IRI
 	Load(vocab.IRI, ...filters.Check) (vocab.Item, error)
 }
 
-type oauthStore interface {
-	readStore
+// AccessStore is an ActivityPub storage implementation that can
+// be used to retrieve actors and their generated OAuth2 access tokens.
+// This functionality is used only by the client to server authorization mechanism.
+type AccessStore interface {
+	ReadStore
 	LoadAccess(string) (*osin.AccessData, error)
 }
 
+// ActivityPubClient is an ActivityPub client that can retrieve remote items
+// based on their IRI.
+// It gets used when trying to dereference remote Actors based on their key IDs,
+// in the process of validating the HTTP-Signatures based authorization headers
+// for server to server, or secure fetch requests.
 type ActivityPubClient interface {
-	Do(r *http.Request) (*http.Response, error)
-	LoadIRI(id vocab.IRI) (vocab.Item, error)
+	Do(*http.Request) (*http.Response, error)
+	CtxLoadIRI(context.Context, vocab.IRI) (vocab.Item, error)
 }
 
 type config struct {
 	c    ActivityPubClient
 	ncFn httpsig.NonceGetter
-	ost  oauthStore
-	ast  readStore
+	ost  AccessStore
+	ast  ReadStore
 	l    log.Logger
 }
 
@@ -55,7 +67,7 @@ func WithLogger(l log.Logger) InitFn {
 }
 
 // WithStorage sets the storage for verifying actors in local storage.
-func WithStorage(s readStore) InitFn {
+func WithStorage(s ReadStore) InitFn {
 	return func(conf *config) {
 		conf.ast = s
 	}
@@ -63,7 +75,7 @@ func WithStorage(s readStore) InitFn {
 
 // WithOAuth2Storage sets the storage for verifying OAuth Access tokens
 // against the local actor storage.
-func WithOAuth2Storage(s oauthStore) InitFn {
+func WithOAuth2Storage(s AccessStore) InitFn {
 	return func(conf *config) {
 		conf.ost = s
 	}

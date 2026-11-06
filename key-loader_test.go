@@ -18,7 +18,7 @@ import (
 func Test_keyLoader_loadKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		storage   readStore
+		storage   ReadStore
 		arg       string
 		handlerFn http.HandlerFunc
 		want      vocab.Actor
@@ -101,7 +101,7 @@ func Test_keyLoader_loadKey(t *testing.T) {
 func Test_keyLoader_loadRemoteKey(t *testing.T) {
 	tests := []struct {
 		name      string
-		storage   readStore
+		storage   ReadStore
 		arg       vocab.IRI
 		handlerFn http.HandlerFunc
 		want      vocab.Actor
@@ -364,7 +364,7 @@ func publicKey(id, owner vocab.IRI) *vocab.PublicKey {
 func Test_keyLoader_loadLocalKey(t *testing.T) {
 	type fields struct {
 		c  ActivityPubClient
-		st readStore
+		st ReadStore
 	}
 	tests := []struct {
 		name    string

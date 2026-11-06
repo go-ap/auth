@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/carlmjohnson/requests"
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
-	"github.com/go-ap/client"
 	"github.com/go-ap/errors"
 	"github.com/go-ap/jsonld"
 )
@@ -29,7 +29,7 @@ type keyLoader interface {
 type localRemoteLoader struct {
 	actor vocab.Actor
 	c     ActivityPubClient
-	st    readStore
+	st    ReadStore
 }
 
 var errEmptyIRI = errors.Newf("empty IRI")
@@ -42,7 +42,7 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		return AnonymousActor, nil, errEmptyIRI
 	}
 
-	req, err := client.FetchRequest(context.Background(), string(iri), http.MethodGet)
+	req, err := requests.URL(string(iri)).Method(http.MethodGet).Request(context.Background())
 	if err != nil {
 		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request: %s", iri)
 	}
@@ -104,7 +104,7 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
-		it, err := k.c.LoadIRI(key.Owner)
+		it, err := k.c.CtxLoadIRI(context.Background(), key.Owner)
 		if err != nil {
 			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor: %s", iri)
 		}

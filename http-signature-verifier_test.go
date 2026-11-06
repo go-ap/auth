@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"git.sr.ht/~mariusor/lw"
+	"github.com/carlmjohnson/requests"
 	"github.com/dadrus/httpsig"
 	vocab "github.com/go-ap/activitypub"
 	"github.com/go-ap/client"
@@ -445,6 +447,55 @@ func Test_compatibleDraftVerifyAlgorithms(t *testing.T) {
 	}
 }
 
+type mockClient http.Client
+
+func (m mockClient) Do(req *http.Request) (*http.Response, error) {
+	cl := http.Client(m)
+	return cl.Do(req)
+}
+
+func (m mockClient) do(ctx context.Context, rb *requests.Builder) (vocab.Item, error) {
+	req, err := rb.Request(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cl := http.Client(m)
+
+	resp, err := cl.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	it, err := vocab.UnmarshalJSON(raw)
+	if vocab.IsNil(it) {
+		if len(raw) > 0 {
+			resp.Body = io.NopCloser(bytes.NewBuffer(raw))
+			return nil, errors.FromResponse(resp)
+		}
+		return nil, errors.NewFromStatus(resp.StatusCode, "")
+	}
+	return it, nil
+}
+
+func (m mockClient) CtxLoadIRI(ctx context.Context, iri vocab.IRI) (vocab.Item, error) {
+	rb := requests.URL(string(iri)).Method(http.MethodGet)
+	// NOTE(marius): these are required when signing requests with our draft HTTP-Signatures
+	rb.Header("Accept", "application/activity+json")
+	if u, err := rb.URL(); err == nil {
+		rb.Header("Host", u.Host)
+	}
+	rb.Header("Date", time.Now().UTC().Format(http.TimeFormat))
+
+	return m.do(ctx, rb)
+}
+
+var _ ActivityPubClient = mockClient{}
+
 func TestLoadRemoteKey(t *testing.T) {
 	type args struct {
 		ctx context.Context
@@ -523,7 +574,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				p := mockActorKey("http://example.com/~jdoe/key", "http://example.com/~jdoe", prv)
 				return &p
 			}(),
-			wantErr: errors.Newf("unable to fetch actor: http://example.com/~jdoe/key"),
+			wantErr: errors.NotFoundf(""),
 		},
 		{
 			name: "good key, good actor",
@@ -574,7 +625,7 @@ func TestLoadRemoteKey(t *testing.T) {
 				srv := httptest.NewServer(tt.handlerFn)
 				defer srv.Close()
 
-				tt.args.c = client.New(client.WithHTTPClient(srv.Client()))
+				tt.args.c = mockClient(*srv.Client())
 			}
 			act, pub, err := LoadRemoteKey(tt.args.ctx, tt.args.c, tt.args.iri)
 			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {

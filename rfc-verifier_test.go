@@ -135,7 +135,7 @@ func (m mockLoader) ResolveKey(_ context.Context, info httpsig.SignatureInfo) (h
 	return httpsig.KeyInfo{Key: key}, nil
 }
 
-func ldr(c ActivityPubClient, st readStore) *localRemoteLoader {
+func ldr(c ActivityPubClient, st ReadStore) *localRemoteLoader {
 	return &localRemoteLoader{c: c, st: st}
 }
 

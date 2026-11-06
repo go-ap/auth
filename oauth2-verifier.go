@@ -13,7 +13,7 @@ import (
 )
 
 type oauthVerifier struct {
-	st oauthStore
+	st AccessStore
 	l  lw.Logger
 }
 
