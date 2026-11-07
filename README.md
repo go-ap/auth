@@ -3,16 +3,17 @@
 [![MIT Licensed](https://img.shields.io/github/license/go-ap/auth.svg)](https://raw.githubusercontent.com/go-ap/auth/master/LICENSE)
 [![Build Status](https://builds.sr.ht/~mariusor/auth.svg)](https://builds.sr.ht/~mariusor/auth)
 [![Test Coverage](https://img.shields.io/coverallsCoverage/github/go-ap/client)](https://coveralls.io/github/go-ap/auth)
-[![Go Report Card](https://goreportcard.com/badge/github.com/go-ap/auth)](https://goreportcard.com/report/github.com/go-ap/auth)
 
 This project is part of the [GoActivityPub](https://github.com/go-ap) library which helps with creating ActivityPub applications using the Go programming language.
 
-It is a wrapper package around making compatible libraries as [HTTP-Sig](https://github.com/go-fed/httpsig) and [OAuth2](https://github.com/openshift/osin) interact with GoActiivtyPub.
+It provides functionality for verifying incoming requests against local and remote actors by loading the information
+from OAuth2 tokens or HTTP-Signatures headers.
 
-It provides functions to append Authorization headers to requests made with the client module, and also middlewares for verifying incoming requests against remote actors.
+## Extended documentation
 
-<!-- Expanded [documentation](https://man.sr.ht/~mariusor/go-activitypub/lib/index.md) -->
-For more details you can have a look at [the expanded documentation](https://go-activitypub.federated.id/lib).
+For more information about how the module works in the scope of the
+GoActivityPub library, see the [expanded
+documentation](https://go-activitypub.federated.id/lib/modules/#auth).
 
 For discussions about the projects you can write to the discussions mailing list: [~mariusor/go-activitypub-discuss@lists.sr.ht](mailto:~mariusor/go-activitypub-discuss@lists.sr.ht)
 

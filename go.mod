@@ -5,13 +5,13 @@ go 1.26.9
 require (
 	git.sr.ht/~mariusor/lw v0.0.0-20260917101519-2e0b081e156c
 	github.com/carlmjohnson/requests v0.26.2
-	github.com/dadrus/httpsig v0.10.0
+	github.com/dadrus/httpsig v0.11.0
 	github.com/dunglas/httpsfv v1.1.2
-	github.com/go-ap/activitypub v0.0.0-20261101142956-a76d71dd72b0
-	github.com/go-ap/client v0.0.0-20261106130430-b74679e33937
-	github.com/go-ap/errors v0.0.0-20260701132509-92e5e4fd6394
-	github.com/go-ap/filters v0.0.0-20261101144638-4754d87b7869
-	github.com/go-ap/jsonld v0.0.0-20260607140920-737b40e0ca38
+	github.com/go-ap/activitypub v0.0.0-20261107170531-73ce953a88f6
+	github.com/go-ap/client v0.0.0-20261107171003-d48690dd77b3
+	github.com/go-ap/errors v0.0.0-20261107170344-5391268d9d2c
+	github.com/go-ap/filters v0.0.0-20261107170746-b873ae37c70e
+	github.com/go-ap/jsonld v0.0.0-20261107170435-a7bb5ba3f894
 	github.com/go-fed/httpsig v1.1.0
 	github.com/google/go-cmp v0.7.0
 	github.com/openshift/osin v1.0.2-0.20220317075346-0f4d38c6e53f
