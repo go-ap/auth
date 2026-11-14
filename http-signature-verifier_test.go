@@ -471,7 +471,7 @@ func (m mockClient) do(ctx context.Context, rb *requests.Builder) (vocab.Item, e
 	if err != nil {
 		return nil, err
 	}
-	it, err := vocab.UnmarshalJSON(raw)
+	it, _ := vocab.UnmarshalJSON(raw)
 	if vocab.IsNil(it) {
 		if len(raw) > 0 {
 			resp.Body = io.NopCloser(bytes.NewBuffer(raw))
