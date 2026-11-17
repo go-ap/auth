@@ -92,7 +92,7 @@ func (m mockLoader) Actor() vocab.Actor {
 
 func (m mockLoader) ResolveKey(_ context.Context, info httpsig.SignatureInfo) (httpsig.KeyInfo, error) {
 	key := httpsig.Key{}
-	pkey, _ := toCryptoPublicKey(m.it.PublicKey)
+	pkey, _ := m.it.PublicKey.CryptoValue()
 	switch pk := pkey.(type) {
 	case *rsa.PublicKey:
 		switch pk.Size() {
@@ -176,7 +176,7 @@ func (fn funcKeyLoader) ResolveKey(_ context.Context, sigInfo httpsig.SignatureI
 		return httpsig.KeyInfo{}, err
 	}
 	key := httpsig.Key{ /*KeyID: string(pk.ID)*/ }
-	pkey, _ := toCryptoPublicKey(*pk)
+	pkey, _ := pk.CryptoValue()
 	switch pk := pkey.(type) {
 	case *rsa.PublicKey:
 		switch pk.Size() {

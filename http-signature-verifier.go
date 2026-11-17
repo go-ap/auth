@@ -5,8 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"net/http"
 
 	"git.sr.ht/~mariusor/lw"
@@ -56,7 +54,7 @@ func (k httpSigVerifier) VerifyDraftSignature(r *http.Request) (vocab.Actor, err
 		return AnonymousActor, errors.Annotatef(err, "unable to load public key based on signature")
 	}
 
-	pk, err := toCryptoPublicKey(*key)
+	pk, err := key.CryptoValue()
 	if err != nil {
 		return AnonymousActor, errors.Annotatef(err, "invalid public key")
 	}
@@ -124,15 +122,4 @@ func compatibleDraftVerifyAlgorithms(pubKey crypto.PublicKey) []draft.Algorithm 
 		return []draft.Algorithm{draft.ED25519}
 	}
 	return nil
-}
-
-func toCryptoPublicKey(key vocab.PublicKey) (crypto.PublicKey, error) {
-	pubBytes, _ := pem.Decode([]byte(key.PublicKeyPem))
-	if pubBytes == nil {
-		return nil, errors.Newf("unable to decode PEM payload for public key")
-	}
-	if pk, _ := x509.ParsePKIXPublicKey(pubBytes.Bytes); pk != nil {
-		return pk, nil
-	}
-	return x509.ParsePKCS1PublicKey(pubBytes.Bytes)
 }

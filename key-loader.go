@@ -191,7 +191,7 @@ func (k *localRemoteLoader) ResolveKey(_ context.Context, sigInfo httpsig.Signat
 	if err != nil {
 		return httpsig.KeyInfo{}, err
 	}
-	pkey, err := toCryptoPublicKey(*pub)
+	pkey, err := pub.CryptoValue()
 	if err != nil {
 		return httpsig.KeyInfo{}, err
 	}

@@ -333,61 +333,6 @@ PSXSfBDiUGhwOw76WuSSsf1D4b/vLoJ10wIDAQAB
 	}()
 )
 
-func actorKeyMock(pem string) vocab.PublicKey {
-	return vocab.PublicKey{
-		ID:           "https://example.com/~johndoe#main",
-		Owner:        "https://example.com/~johndoe",
-		PublicKeyPem: pem,
-	}
-}
-
-func Test_toCryptoPublicKey(t *testing.T) {
-	tests := []struct {
-		name    string
-		key     vocab.PublicKey
-		want    crypto.PublicKey
-		wantErr error
-	}{
-		{
-			name:    "empty",
-			key:     vocab.PublicKey{},
-			wantErr: errors.Newf("unable to decode PEM payload for public key"),
-		},
-		{
-			name: "rsa x509",
-			key:  actorKeyMock(pubRSA),
-			want: prvKeyRSA.Public(),
-		},
-		{
-			name: "rsa pkcs#1",
-			key:  actorKeyMock(pubRSA1),
-			want: prvKeyRSA1.Public(),
-		},
-		{
-			name: "ecdsa",
-			key:  actorKeyMock(pubECDSA),
-			want: prvKeyECDSA.Public(),
-		},
-		{
-			name: "ed25519",
-			key:  actorKeyMock(pubEd25519),
-			want: prvKeyEd25519.Public(),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := toCryptoPublicKey(tt.key)
-			if !cmp.Equal(err, tt.wantErr, EquateWeakErrors) {
-				t.Errorf("toCryptoPublicKey() error = %s", cmp.Diff(tt.wantErr, err, EquateWeakErrors))
-				return
-			}
-			if !cmp.Equal(got, tt.want, EquatePublicKeys) {
-				t.Errorf("toCryptoPublicKey() got = %s", cmp.Diff(tt.want, got, EquatePublicKeys))
-			}
-		})
-	}
-}
-
 func arePubKeys(a, b any) bool {
 	_, ok1 := a.(cryptoPubKey)
 	_, ok2 := b.(cryptoPubKey)

@@ -90,6 +90,7 @@ func (k httpSigVerifier) VerifyRFCSignature(req *http.Request) (vocab.Actor, err
 	if !ok {
 		return AnonymousActor, errInvalidClient
 	}
+	// TODO(marius): check if the new dadrus/httpsig API solves this issue for us.
 	if alg := signatureInputAlgorithm(req.Header); alg != "" {
 		resolver = hardcodedAlgResolver{alg: alg, actorKeyLoader: resolver}
 	}
