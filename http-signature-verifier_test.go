@@ -514,12 +514,57 @@ func TestLoadRemoteKey(t *testing.T) {
 				}
 				w.WriteHeader(http.StatusNotFound)
 			},
-			want: AnonymousActor,
+			want:    AnonymousActor,
+			wantKey: nil,
+			wantErr: errors.NotFoundf(""),
+		},
+		{
+			name: "keyId is different than actor's publicKey.ID, but key material is the same",
+			args: args{
+				ctx: context.Background(),
+				iri: "http://example.com/malicious/key",
+			},
+			handlerFn: func(w http.ResponseWriter, r *http.Request) {
+				actor := mockActor()
+				var payload []byte
+				if strings.HasSuffix(r.URL.Path, "/key") {
+					pub := mockActorKey("http://example.com/malicious/key", actor.ID, prv)
+					payload, _ = jsonld.Marshal(pub)
+				} else {
+					payload, _ = vocab.MarshalJSON(actor)
+				}
+				w.Header().Set("Cache-Control", "public")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(payload)
+			},
+			want: mockActor(),
 			wantKey: func() *vocab.PublicKey {
-				p := mockActorKey("http://example.com/~jdoe/key", "http://example.com/~jdoe", prv)
+				p := mockActorKey("http://example.com/~jdoe#main", "http://example.com/~jdoe", prv)
 				return &p
 			}(),
-			wantErr: errors.NotFoundf(""),
+		},
+		{
+			name: "keyId is different than actor's publicKey.ID and keys are different",
+			args: args{
+				ctx: context.Background(),
+				iri: "http://example.com/malicious/key",
+			},
+			handlerFn: func(w http.ResponseWriter, r *http.Request) {
+				actor := mockActor()
+				var payload []byte
+				if strings.HasSuffix(r.URL.Path, "/key") {
+					pub := mockActorKey("http://example.com/malicious/key", actor.ID, prvKeyRSA1)
+					payload, _ = jsonld.Marshal(pub)
+				} else {
+					payload, _ = vocab.MarshalJSON(actor)
+				}
+				w.Header().Set("Cache-Control", "public")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(payload)
+			},
+			want:    AnonymousActor,
+			wantKey: nil,
+			wantErr: errors.Errorf("owner's public key id %s does not match the received key: %s", mockActor().PublicKey.ID, "http://example.com/~jdoe/key"),
 		},
 		{
 			name: "good key, good actor",
@@ -529,9 +574,9 @@ func TestLoadRemoteKey(t *testing.T) {
 			},
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
 				actor := mockActor()
+				actor.PublicKey.ID = "http://example.com/~jdoe/key"
 				payload, _ := vocab.MarshalJSON(actor)
 				if strings.HasSuffix(r.URL.Path, "/key") {
-					actor.PublicKey.ID = "http://example.com/~jdoe/key"
 					payload, _ = jsonld.Marshal(actor.PublicKey)
 				}
 				w.Header().Set("Cache-Control", "public")

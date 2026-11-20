@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"strings"
@@ -34,22 +36,22 @@ type localRemoteLoader struct {
 
 var errEmptyIRI = errors.Newf("empty IRI")
 
-func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+func (k localRemoteLoader) loadRemoteKey(keyID vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	if k.c == nil {
 		return AnonymousActor, nil, errInvalidClient
 	}
-	if iri == "" {
+	if keyID == "" {
 		return AnonymousActor, nil, errEmptyIRI
 	}
 
-	req, err := requests.URL(string(iri)).Method(http.MethodGet).Request(context.Background())
+	req, err := requests.URL(string(keyID)).Method(http.MethodGet).Request(context.Background())
 	if err != nil {
-		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request: %s", iri)
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to create request: %s", keyID)
 	}
 
 	resp, err := k.c.Do(req)
 	if err != nil {
-		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key: %s", iri)
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to fetch key: %s", keyID)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -62,60 +64,79 @@ func (k localRemoteLoader) loadRemoteKey(iri vocab.IRI) (vocab.Actor, *vocab.Pub
 
 	switch resp.StatusCode {
 	case http.StatusGone:
-		return AnonymousActor, nil, errors.Gonef("key does not exist: %s", iri)
+		return AnonymousActor, nil, errors.Gonef("key does not exist: %s", keyID)
 	case http.StatusOK, http.StatusNotModified:
 		// OK
 	default:
 		if errb, _ := errors.UnmarshalJSON(body); len(errb) > 0 {
-			err = errors.AnnotateFromStatus(errors.Join(errb...), resp.StatusCode, "unable to fetch key: %s", iri)
+			err = errors.AnnotateFromStatus(errors.Join(errb...), resp.StatusCode, "unable to fetch key: %s", keyID)
 		} else {
 			if len(body) > 0 {
-				err = errors.AnnotateFromStatus(errors.Newf("%s", body[:min(512, len(body))]), resp.StatusCode, "unable to fetch key: %s", iri)
+				err = errors.AnnotateFromStatus(errors.Newf("%s", body[:min(512, len(body))]), resp.StatusCode, "unable to fetch key: %s", keyID)
 			} else {
-				err = errors.NewFromStatus(resp.StatusCode, "unable to fetch key: %s", iri)
+				err = errors.NewFromStatus(resp.StatusCode, "unable to fetch key: %s", keyID)
 			}
 		}
 		return AnonymousActor, nil, err
 	}
 
 	key := new(vocab.PublicKey)
-	act := vocab.Actor{}
+	act := new(vocab.Actor)
 
 	// NOTE(marius): try to decode the response body as a PublicKey
 	if err = jsonld.Unmarshal(body, key); err != nil || key.Owner == vocab.EmptyIRI {
 		// NOTE(marius): then we try to decode the body as an Actor
-		err = jsonld.Unmarshal(body, &act)
+		err = jsonld.Unmarshal(body, act)
 	}
-	// NOTE(marius): if we were unable to decode a PublicKey, nor an Actor that matches the IRI, we have failed.
-	if !key.ID.Equal(iri) && !act.ID.Equal(iri) {
-		if err != nil {
-			err = errors.Annotatef(err, "unable to decode key or actor: %s", iri)
-		} else {
-			err = errors.Newf("unable to decode key or actor: %s", iri)
-		}
-		return AnonymousActor, nil, err
+	if err != nil {
+		return AnonymousActor, nil, errors.Annotatef(err, "unable to decode key or actor: %s", keyID)
 	}
 
-	if act.ID.Equal(iri) {
+	// NOTE(marius): if we were unable to decode a PublicKey, nor an Actor that matches the IRI, we have failed.
+	if !key.ID.Equal(keyID) && !act.ID.Equal(keyID) {
+		return AnonymousActor, nil, errors.Newf("unable to decode key or actor: %s", keyID)
+	}
+
+	// NOTE(marius): the received IRI was an actor's, we return its embedded Public Key
+	if act.ID.Equal(keyID) {
 		key = &act.PublicKey
 	}
-	// NOTE(marius): we successfully loaded a PublicKey, we try to load the Actor from its Owner property
-	if key.ID.Equal(iri) && !act.ID.Equal(key.Owner) {
+
+	// NOTE(marius): the received IRI was a PublicKey, we try to load the Actor from its Owner property
+	// We check the
+	if key.ID.Equal(keyID) && !act.ID.Equal(key.Owner) {
 		// NOTE(marius): the SWICG document linked at the LoadActorFromIRIKey method mentions
 		// that we can use both key.Owner or key.Controller, however we don't have Controller
 		// in the PublicKey struct. We should probably change that.
 		it, err := k.c.CtxLoadIRI(context.Background(), key.Owner)
 		if err != nil {
-			return AnonymousActor, key, errors.NewFromStatus(resp.StatusCode, "unable to fetch actor: %s", iri)
+			return AnonymousActor, nil, errors.NewFromStatus(resp.StatusCode, "unable to fetch key owner actor %s for key: %s", key.Owner, keyID)
 		}
 
-		_ = vocab.OnActor(it, func(actor *vocab.Actor) error {
-			act = *actor
-			return nil
-		})
+		act, err = vocab.ToActor(it)
+		if err != nil {
+			return AnonymousActor, nil, errors.Annotatef(err, "key owner %s does not resolve to a valid actor for key: %s", key.Owner, keyID)
+		}
+
+		// NOTE(marius): for the cases where the incoming KeyID leads to a Key with an Owner actor which has
+		// a different keyID in its PublicKey value, we consider it might be an exploit attempt, and double-check
+		// the key material to match.
+		if !act.PublicKey.ID.Equal(keyID) && !pemValuesAreEqual(act.PublicKey.PublicKeyPem, key.PublicKeyPem) {
+			return AnonymousActor, nil, errors.Errorf("owner's public key id %s does not match the received key: %s", act.PublicKey.ID, keyID)
+		}
+		key = &act.PublicKey
 	}
 
-	return act, key, nil
+	return *act, key, nil
+}
+
+func pemValuesAreEqual(pem1, pem2 string) bool {
+	pubBytes1, _ := pem.Decode([]byte(pem1))
+	pubBytes2, _ := pem.Decode([]byte(pem2))
+	if pubBytes1 == nil || pubBytes2 == nil {
+		return false
+	}
+	return pubBytes1.Type == pubBytes2.Type && bytes.Equal(pubBytes1.Bytes, pubBytes2.Bytes)
 }
 
 func (k localRemoteLoader) loadLocalKey(iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
