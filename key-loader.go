@@ -19,9 +19,12 @@ import (
 	"github.com/go-ap/jsonld"
 )
 
-// LoadRemoteKey fetches a remote Public Key and returns it's owner.
-func LoadRemoteKey(_ context.Context, c ActivityPubClient, iri vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
-	return (&localRemoteLoader{c: c}).loadRemoteKey(iri)
+// LoadRemoteKey retrieves a remote Public Key and returns it, together with its owner Actor.
+// When there is a mismatch between the Key retrieved at the keyID and the one the Actor points to,
+// but the public key material is the same, we return the value associated with the Actor, not the
+// one pointed at by the keyID.
+func LoadRemoteKey(_ context.Context, c ActivityPubClient, keyID vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
+	return (&localRemoteLoader{c: c}).loadRemoteKey(keyID)
 }
 
 type keyLoader interface {
@@ -202,8 +205,14 @@ func (k localRemoteLoader) loadKey(keyID string) (vocab.Actor, *vocab.PublicKey,
 	return actor, key, nil
 }
 
+// ResolveKey retrieves the public key associated with the signature information and
+// returns the corresponding key information.
+// In the process the Actor specified as the key's Owner is also dereferenced and
+// when there is a mismatch between the original key and the one the Actor points to,
+// (while the public key material is the same), we return the value associated with the Actor,
+// not the one pointed at by the keyID.
 func (k *localRemoteLoader) ResolveKey(_ context.Context, sigInfo httpsig.SignatureInfo) (httpsig.KeyInfo, error) {
-	key := httpsig.Key{}
+	key := httpsig.KeyInfo{} //Key: httpsig.Key{}
 	keyID, ok := sigInfo.Parameters.KeyID()
 	if !ok {
 		return httpsig.KeyInfo{}, errors.Newf("invalid keyID in the signature parameters")
@@ -217,16 +226,18 @@ func (k *localRemoteLoader) ResolveKey(_ context.Context, sigInfo httpsig.Signat
 		return httpsig.KeyInfo{}, err
 	}
 	k.actor = act
-	alg, ok := sigInfo.Parameters.Alg()
-	if !ok {
-		alg = rfcAlgorithmFromPublicKey(pkey)
+
+	alg := rfcAlgorithmFromPublicKey(pkey)
+	if parAlg, ok := sigInfo.Parameters.Alg(); ok && parAlg != alg {
+		return key, errors.Newf("mismatch between the signature alg parameter and the key's algorithm")
 	}
-	key.Algorithm = alg
-	key.Material = pkey
-	return httpsig.KeyInfo{Key: key}, nil
+	key.Key.Algorithm = alg
+	key.Key.Material = pkey
+	return key, nil
 }
 
 func rfcAlgorithmFromPublicKey(pkey crypto.PublicKey) httpsig.SignatureAlgorithm {
+	// NOTE(marius): we probably should return a slice of valid algorithms if sizes are transitive.
 	switch pk := pkey.(type) {
 	case *rsa.PublicKey:
 		switch pk.Size() {
