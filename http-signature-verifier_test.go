@@ -544,6 +544,31 @@ func TestLoadRemoteKey(t *testing.T) {
 			}(),
 		},
 		{
+			name: "keyId points to attacker key, but with victim owner",
+			args: args{
+				ctx: context.Background(),
+				iri: "http://example.com/~malicious/key",
+			},
+			handlerFn: func(w http.ResponseWriter, r *http.Request) {
+				actor := mockActor()
+				// NOTE(marius): the key points to a malicious owner IRI,
+				// which returns a crafted Actor with the id modified to match the victim
+				pub := mockActorKey("http://example.com/~malicious/key", "http://example.com/~malicious", prvKeyRSA1)
+				actor.PublicKey = pub
+				var payload []byte
+				if strings.HasSuffix(r.URL.Path, "/key") {
+					payload, _ = jsonld.Marshal(pub)
+				} else {
+					payload, _ = vocab.MarshalJSON(actor)
+				}
+				w.Header().Set("Cache-Control", "public")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(payload)
+			},
+			want:    AnonymousActor,
+			wantErr: errors.Errorf("the key owner IRI %s does not match the received actor: %s", "http://example.com/~malicious", "http://example.com/~jdoe"),
+		},
+		{
 			name: "keyId is different than actor's publicKey.ID and keys are different",
 			args: args{
 				ctx: context.Background(),

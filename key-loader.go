@@ -19,10 +19,11 @@ import (
 	"github.com/go-ap/jsonld"
 )
 
-// LoadRemoteKey retrieves a remote Public Key and returns it, together with its owner Actor.
-// When there is a mismatch between the Key retrieved at the keyID and the one the Actor points to,
-// but the public key material is the same, we return the value associated with the Actor, not the
-// one pointed at by the keyID.
+// LoadRemoteKey retrieves a remote Public Key and returns it, together with the Actor pointed at by
+// its Owner property.
+// We check that when there is a mismatch between the Key retrieved at the keyID and the one the owner
+// Actor points to (in both ID and material) we return an error.
+// However, if the material is the same, we allow it and the calling code can further invalidate it that if it's not acceptable.
 func LoadRemoteKey(_ context.Context, c ActivityPubClient, keyID vocab.IRI) (vocab.Actor, *vocab.PublicKey, error) {
 	return (&localRemoteLoader{c: c}).loadRemoteKey(keyID)
 }
@@ -119,6 +120,9 @@ func (k localRemoteLoader) loadRemoteKey(keyID vocab.IRI) (vocab.Actor, *vocab.P
 		act, err = vocab.ToActor(it)
 		if err != nil {
 			return AnonymousActor, nil, errors.Annotatef(err, "key owner %s does not resolve to a valid actor for key: %s", key.Owner, keyID)
+		}
+		if !act.ID.Equal(key.Owner) {
+			return AnonymousActor, nil, errors.Errorf("the key owner IRI %s does not match the received actor: %s", key.Owner, act.ID)
 		}
 
 		// NOTE(marius): for the cases where the incoming KeyID leads to a Key with an Owner actor which has
